@@ -27,7 +27,6 @@ import {
   ChevronLeft,
   User,
   Calendar,
-  Plus,
 } from "lucide-react";
 
 export const App: React.FC = () => {
@@ -747,23 +746,15 @@ export const App: React.FC = () => {
         )}
       </main>
 
-      {/* Nút Thêm link Instagram (+) Tối giản & Đẹp mắt */}
-      <button
-        onClick={() => {
-          setAddUrl("");
-          setIsAddModalOpen(true);
-        }}
-        className="fixed right-4 bottom-[calc(var(--sab)+80px)] z-20 w-[52px] h-[52px] rounded-full bg-gradient-to-tr from-yellow-400 via-pink-500 to-purple-600 text-white shadow-xl shadow-pink-600/35 border border-white/25 flex items-center justify-center transition-all duration-200 active:scale-90"
-        title="Tải ảnh mới từ Instagram"
-      >
-        <Plus className="w-6 h-6 stroke-[2.8]" />
-      </button>
-
-      {/* iOS Bottom TabBar (Bo tròn viền kép theo ảnh mẫu) */}
+      {/* iOS Bottom TabBar (Bo tròn viền kép kèm cột nút Thêm + và Tìm kiếm đồng bộ) */}
       <TabBar
         currentTab={currentTab}
         onTabChange={setCurrentTab}
         onOpenSettings={() => setIsSettingsOpen(true)}
+        onOpenAddPhoto={() => {
+          setAddUrl("");
+          setIsAddModalOpen(true);
+        }}
       />
 
       {/* Modal Tải Ảnh Từ Instagram */}
