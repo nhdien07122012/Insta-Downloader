@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import type { PhotoItem, DateGroup, TelegramConfig, PostAlbum } from "./types";
 import {
   getStoredConfig,
@@ -44,6 +44,43 @@ export const App: React.FC = () => {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [addUrl, setAddUrl] = useState("");
   const [clipboardPrompt, setClipboardPrompt] = useState<string | null>(null);
+
+  // Pull-to-Refresh State
+  const [pullDistance, setPullDistance] = useState(0);
+  const [isPulling, setIsPulling] = useState(false);
+  const touchStartY = useRef<number | null>(null);
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    if (window.scrollY <= 5 && !loading) {
+      touchStartY.current = e.touches[0].clientY;
+      setIsPulling(true);
+    } else {
+      touchStartY.current = null;
+    }
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (touchStartY.current === null || loading) return;
+    const currentY = e.touches[0].clientY;
+    const diff = currentY - touchStartY.current;
+    if (diff > 0 && window.scrollY <= 5) {
+      const damped = Math.min(Math.pow(diff, 0.85) * 1.8, 85);
+      setPullDistance(damped);
+    } else {
+      setPullDistance(0);
+    }
+  };
+
+  const handleTouchEnd = async () => {
+    if (touchStartY.current === null) return;
+    setIsPulling(false);
+    touchStartY.current = null;
+    if (pullDistance >= 55 && !loading) {
+      setPullDistance(55);
+      await loadPhotos();
+    }
+    setPullDistance(0);
+  };
 
   // Lắng nghe Deep Link & Kiểm tra Clipboard
   useEffect(() => {
@@ -284,8 +321,37 @@ export const App: React.FC = () => {
         }}
       />
 
-      {/* Main Content Area */}
-      <main className="max-w-md mx-auto min-h-[calc(100vh-140px)]">
+      {/* Main Content Area with Pull-To-Refresh */}
+      <main
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+        className="max-w-md mx-auto min-h-[calc(100vh-140px)]"
+      >
+        {/* Pull-To-Refresh Indicator */}
+        <div
+          style={{
+            height: `${pullDistance}px`,
+            transition: isPulling ? "none" : "height 0.25s cubic-bezier(0.2, 0, 0, 1)",
+          }}
+          className="overflow-hidden flex items-center justify-center pointer-events-none"
+        >
+          <div className="flex items-center gap-2 py-2 text-xs font-semibold text-neutral-300">
+            <RefreshCw
+              style={{
+                transform: `rotate(${pullDistance * 4}deg)`,
+              }}
+              className={`w-4 h-4 text-cyan-400 ${
+                pullDistance >= 55 || loading ? "animate-spin" : ""
+              }`}
+            />
+            <span>
+              {pullDistance >= 55 || loading
+                ? "Đang làm mới ảnh từ Telegram..."
+                : "Kéo xuống để làm mới"}
+            </span>
+          </div>
+        </div>
         {/* Banner Phát hiện link Instagram từ Clipboard */}
         {clipboardPrompt && (
           <div className="mx-4 mt-3 mb-2 p-3.5 bg-gradient-to-r from-purple-950/90 via-pink-950/90 to-neutral-900 border border-pink-500/40 rounded-2xl flex items-center justify-between shadow-xl animate-in slide-in-from-top duration-300">
@@ -681,30 +747,17 @@ export const App: React.FC = () => {
         )}
       </main>
 
-      {/* Floating Action Buttons */}
-      <div className="fixed right-4 bottom-24 z-20 flex flex-col gap-2.5 items-end">
-        {/* Nút Thêm link Instagram */}
-        <button
-          onClick={() => {
-            setAddUrl("");
-            setIsAddModalOpen(true);
-          }}
-          className="w-12 h-12 rounded-full bg-gradient-to-tr from-yellow-400 via-pink-500 to-purple-600 text-white shadow-xl shadow-pink-600/30 flex items-center justify-center transition-transform active:scale-90"
-          title="Tải ảnh mới từ Instagram"
-        >
-          <Plus className="w-6 h-6 stroke-[2.5]" />
-        </button>
-
-        {/* Nút Làm mới thư viện */}
-        <button
-          onClick={loadPhotos}
-          disabled={loading}
-          className="w-10 h-10 rounded-full bg-neutral-900/90 backdrop-blur-md border border-neutral-700/80 active:bg-neutral-800 text-neutral-200 shadow-lg flex items-center justify-center transition-transform active:scale-90"
-          title="Làm mới ảnh"
-        >
-          <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin text-blue-400" : ""}`} />
-        </button>
-      </div>
+      {/* Nút Thêm link Instagram (+) Tối giản & Đẹp mắt */}
+      <button
+        onClick={() => {
+          setAddUrl("");
+          setIsAddModalOpen(true);
+        }}
+        className="fixed right-4 bottom-[calc(var(--sab)+80px)] z-20 w-[52px] h-[52px] rounded-full bg-gradient-to-tr from-yellow-400 via-pink-500 to-purple-600 text-white shadow-xl shadow-pink-600/35 border border-white/25 flex items-center justify-center transition-all duration-200 active:scale-90"
+        title="Tải ảnh mới từ Instagram"
+      >
+        <Plus className="w-6 h-6 stroke-[2.8]" />
+      </button>
 
       {/* iOS Bottom TabBar (Bo tròn viền kép theo ảnh mẫu) */}
       <TabBar

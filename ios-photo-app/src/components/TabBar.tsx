@@ -22,9 +22,15 @@ export const TabBar: React.FC<TabBarProps> = ({
   const isSearchActive = currentTab === "search";
 
   return (
-    <div className="fixed inset-x-0 bottom-0 z-30 pointer-events-none pb-[calc(var(--sab)+8px)] px-3 flex items-center justify-center gap-2.5">
-      {/* Viên nang lớn chứa các Tab chính (Thư viện | Kỷ niệm | Album | Cài đặt) */}
-      <nav className="pointer-events-auto flex items-center bg-[#1c1c1e]/95 backdrop-blur-xl border border-neutral-700/60 rounded-full p-1.5 shadow-2xl shadow-black/80 min-h-[58px]">
+    <div className="fixed inset-x-0 bottom-0 z-30 pointer-events-none pb-[calc(var(--sab)+8px)] px-3 flex items-center justify-center gap-2">
+      {/* Viên nang lớn chứa các Tab chính với hiệu ứng mờ kính (Frosted Glass Blur) */}
+      <nav
+        style={{
+          backdropFilter: "blur(24px)",
+          WebkitBackdropFilter: "blur(24px)",
+        }}
+        className="pointer-events-auto flex items-center bg-[#18181c]/75 border border-white/10 rounded-full p-1 shadow-2xl shadow-black/80 min-h-[56px]"
+      >
         {tabs.map((tab) => {
           const Icon = tab.icon;
           const isActive = currentTab === tab.id;
@@ -41,9 +47,9 @@ export const TabBar: React.FC<TabBarProps> = ({
             <button
               key={tab.id}
               onClick={handleClick}
-              className={`flex flex-col items-center justify-center px-3.5 py-1.5 min-w-[64px] rounded-2xl transition-all duration-200 active:scale-95 ${
+              className={`flex flex-col items-center justify-center px-3.5 py-1.5 min-w-[64px] rounded-full transition-all duration-200 active:scale-95 ${
                 isActive
-                  ? "bg-[#2c2c2e] text-[#ff375f] shadow-sm"
+                  ? "bg-[#2c2c2e]/90 border border-white/15 text-[#ff375f] shadow-sm"
                   : "text-white hover:text-neutral-200 active:opacity-70"
               }`}
             >
@@ -64,12 +70,16 @@ export const TabBar: React.FC<TabBarProps> = ({
         })}
       </nav>
 
-      {/* Nút Tìm kiếm hình tròn riêng biệt (Search Circle Button) */}
+      {/* Nút Tìm kiếm hình tròn riêng biệt với hiệu ứng mờ kính */}
       <button
         onClick={() => onTabChange("search")}
-        className={`pointer-events-auto w-[58px] h-[58px] rounded-full flex items-center justify-center bg-[#1c1c1e]/95 backdrop-blur-xl border border-neutral-700/60 shadow-2xl shadow-black/80 transition-all duration-200 active:scale-95 shrink-0 ${
+        style={{
+          backdropFilter: "blur(24px)",
+          WebkitBackdropFilter: "blur(24px)",
+        }}
+        className={`pointer-events-auto w-[56px] h-[56px] rounded-full flex items-center justify-center bg-[#18181c]/75 border border-white/10 shadow-2xl shadow-black/80 transition-all duration-200 active:scale-95 shrink-0 ${
           isSearchActive
-            ? "bg-[#2c2c2e] border-[#ff375f]/50 text-[#ff375f]"
+            ? "bg-[#2c2c2e]/90 border-[#ff375f]/50 text-[#ff375f]"
             : "text-white hover:text-neutral-200"
         }`}
         title="Tìm kiếm"
