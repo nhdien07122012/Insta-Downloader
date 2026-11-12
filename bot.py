@@ -325,12 +325,16 @@ async def handle_instagram_message(update: Update, context: ContextTypes.DEFAULT
         # Xóa tin nhắn link thô để Kênh lưu trữ luôn sạch đẹp, chỉ hiển thị Album ảnh
         if is_channel or DELETE_LINK_MESSAGE:
             try:
-                await msg.delete()
-                logger.info(f"🗑️ Đã xóa tin nhắn link gốc (ID: {msg.message_id})")
+                chat_id_to_delete = msg.chat_id
+                msg_id_to_delete = msg.message_id
+                logger.info(f"Đang tiến hành xóa tin nhắn link (chat_id={chat_id_to_delete}, msg_id={msg_id_to_delete})...")
+                await context.bot.delete_message(chat_id=chat_id_to_delete, message_id=msg_id_to_delete)
+                logger.info(f"🗑️ Đã xóa tin nhắn link gốc (ID: {msg_id_to_delete}) thành công.")
             except Exception as e:
-                logger.warning(
+                logger.error(
                     f"⚠️ Không thể xóa tin nhắn link: {e}. "
-                    "Hãy đảm bảo Bot được bật quyền 'Delete messages' (Xóa tin nhắn) trong cài đặt Admin của Kênh!"
+                    "Hãy kiểm tra quyền 'Delete messages' của Bot trong cài đặt Kênh!",
+                    exc_info=True
                 )
 
         # Nếu gửi trong chat riêng: Cập nhật status_msg kèm nút bấm
