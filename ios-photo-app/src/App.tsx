@@ -49,10 +49,22 @@ export const App: React.FC = () => {
   useEffect(() => {
     try {
       CapApp.addListener("appUrlOpen", (data) => {
-        if (data.url && data.url.includes("url=")) {
-          const rawUrl = data.url.split("url=")[1];
-          const decoded = decodeURIComponent(rawUrl);
-          setAddUrl(decoded);
+        if (!data.url) return;
+        let target = "";
+        if (data.url.includes("url=")) {
+          target = decodeURIComponent(data.url.split("url=")[1]);
+        } else if (data.url.includes("instagram.com")) {
+          const match = data.url.match(/https?:\/\/[^\s"']+/i);
+          if (match) {
+            target = match[0];
+          } else {
+            const idx = data.url.indexOf("instagram.com");
+            target = "https://" + data.url.slice(idx);
+          }
+        }
+
+        if (target) {
+          setAddUrl(target);
           setIsAddModalOpen(true);
         }
       });
