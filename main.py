@@ -1,4 +1,27 @@
 import sys
+import subprocess
+
+# Tự động kiểm tra và cài đặt các thư viện cần thiết nếu người dùng chạy trên môi trường Python mới
+REQUIRED_PACKAGES = [
+    ("gallery_dl", "gallery-dl>=1.27.0"),
+    ("aiosqlite", "aiosqlite>=0.20.0"),
+    ("telegram", "python-telegram-bot>=21.0"),
+    ("dotenv", "python-dotenv>=1.0.0"),
+    ("requests", "requests>=2.31.0"),
+    ("yt_dlp", "yt-dlp>=2024.0.0"),
+]
+
+for mod_name, pkg_name in REQUIRED_PACKAGES:
+    try:
+        __import__(mod_name)
+    except ImportError:
+        print(f"📦 Đang tự động cài đặt thư viện thiếu: {pkg_name}...")
+        try:
+            subprocess.check_call([sys.executable, "-m", "pip", "install", pkg_name])
+            print(f"✅ Đã cài đặt xong: {pkg_name}")
+        except Exception as e:
+            print(f"⚠️ Không thể tự cài {pkg_name}: {e}. Vui lòng chạy 'pip install {pkg_name}' thủ công.")
+
 import os
 import shutil
 import asyncio
