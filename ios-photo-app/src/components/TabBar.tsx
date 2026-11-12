@@ -15,8 +15,8 @@ export const TabBar: React.FC<TabBarProps> = ({ currentTab, onTabChange }) => {
   ];
 
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-30 pb-[var(--sab)] bg-black/80 backdrop-blur-xl border-t border-white/10">
-      <div className="flex justify-around items-center h-14">
+    <div className="fixed inset-x-0 bottom-0 z-30 pointer-events-none pb-[var(--sab)] px-4 pt-2">
+      <nav className="pointer-events-auto max-w-md mx-auto mb-2 liquid-glass-pill rounded-full p-1.5 shadow-2xl flex items-center justify-around">
         {tabs.map((tab) => {
           const Icon = tab.icon;
           const isActive = currentTab === tab.id;
@@ -24,16 +24,20 @@ export const TabBar: React.FC<TabBarProps> = ({ currentTab, onTabChange }) => {
             <button
               key={tab.id}
               onClick={() => onTabChange(tab.id)}
-              className={`flex flex-col items-center justify-center flex-1 py-1 transition-colors ${
-                isActive ? "text-blue-500 font-semibold" : "text-neutral-400 hover:text-neutral-200"
+              className={`flex-1 flex flex-col items-center justify-center py-2 px-1 rounded-full transition-all duration-200 active:scale-95 min-h-[52px] ${
+                isActive
+                  ? "liquid-glass-active text-white font-semibold shadow-md"
+                  : "text-neutral-400 hover:text-white active:bg-white/5"
               }`}
             >
-              <Icon className="w-5 h-5 mb-0.5" />
-              <span className="text-[10px] tracking-tight">{tab.label}</span>
+              <Icon className={`w-5 h-5 mb-1 transition-transform duration-200 ${isActive ? "scale-110 text-blue-400 stroke-[2.2]" : "stroke-[1.8]"}`} />
+              <span className={`text-[11px] tracking-tight ${isActive ? "text-white font-bold" : "text-neutral-400"}`}>
+                {tab.label}
+              </span>
             </button>
           );
         })}
-      </div>
-    </nav>
+      </nav>
+    </div>
   );
 };

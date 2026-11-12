@@ -109,47 +109,47 @@ export const AddPhotoModal: React.FC<AddPhotoModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
-      <div className="w-full max-w-md bg-neutral-900 border border-neutral-800 rounded-3xl p-6 shadow-2xl text-white">
-        <div className="flex items-center justify-between pb-4 border-b border-neutral-800">
-          <h2 className="text-lg font-bold flex items-center gap-2">
-            <span className="w-7 h-7 rounded-lg bg-gradient-to-tr from-yellow-400 via-pink-500 to-purple-600 flex items-center justify-center">
-              <Plus className="w-4 h-4 text-white" />
+    <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-md flex items-center justify-center p-4">
+      <div className="w-full max-w-md liquid-glass-sheet border border-white/20 rounded-[32px] p-6 shadow-2xl text-white">
+        <div className="flex items-center justify-between pb-4 border-b border-white/10">
+          <h2 className="text-lg font-bold flex items-center gap-2.5">
+            <span className="w-8 h-8 rounded-xl bg-gradient-to-tr from-yellow-400 via-pink-500 to-purple-600 flex items-center justify-center shadow-md">
+              <Plus className="w-5 h-5 text-white stroke-[2.5]" />
             </span>
             Tải Ảnh Từ Instagram
           </h2>
           <button
             onClick={onClose}
             disabled={loading}
-            className="w-8 h-8 rounded-full bg-neutral-800 flex items-center justify-center text-neutral-400 active:text-white disabled:opacity-50"
+            className="w-9 h-9 rounded-full bg-white/10 border border-white/15 flex items-center justify-center text-white active:scale-95 disabled:opacity-50 transition-all"
           >
             <X className="w-4 h-4" />
           </button>
         </div>
 
-        <p className="text-xs text-neutral-400 mt-3 leading-relaxed">
+        <p className="text-xs text-neutral-300 mt-3 leading-relaxed">
           Dán liên kết bài viết Instagram (ảnh đơn hoặc carousel nhiều ảnh) để Bot TX3 Mini tự động tải về và lưu vào Kho ảnh Telegram của bạn.
         </p>
 
         {errorMsg && (
-          <div className="mt-3 p-3 bg-red-950/70 border border-red-800/60 rounded-xl text-xs text-red-300 flex items-center gap-2">
+          <div className="mt-3 p-3.5 liquid-glass-card border border-red-500/40 rounded-2xl text-xs text-red-300 flex items-center gap-2.5">
             <AlertCircle className="w-4 h-4 text-red-400 shrink-0" />
-            <span>{errorMsg}</span>
+            <span className="font-medium">{errorMsg}</span>
           </div>
         )}
 
         <form onSubmit={handleStartDownload} className="mt-4 space-y-4">
           <div>
-            <div className="flex items-center justify-between mb-1.5">
-              <label className="text-xs text-neutral-400 font-medium">
+            <div className="flex items-center justify-between mb-2">
+              <label className="text-xs text-neutral-300 font-semibold">
                 Liên kết bài viết Instagram:
               </label>
               <button
                 type="button"
                 onClick={handlePasteClipboard}
-                className="text-[11px] text-blue-400 hover:text-blue-300 flex items-center gap-1 font-medium active:opacity-70"
+                className="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1 font-semibold active:opacity-70 px-2 py-1 rounded-lg bg-white/5 border border-white/10"
               >
-                <ClipboardIcon className="w-3 h-3" />
+                <ClipboardIcon className="w-3.5 h-3.5" />
                 <span>Dán từ bộ nhớ tạm</span>
               </button>
             </div>
@@ -159,25 +159,25 @@ export const AddPhotoModal: React.FC<AddPhotoModalProps> = ({
               value={url}
               onChange={(e) => setUrl(e.target.value)}
               disabled={loading}
-              className="w-full bg-neutral-800 border border-neutral-700 rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-blue-500 transition-colors placeholder:text-neutral-500 disabled:opacity-60"
+              className="w-full liquid-glass-card border border-white/15 rounded-2xl px-4 py-3.5 text-sm text-white focus:outline-none focus:border-blue-400 transition-colors placeholder:text-neutral-500 disabled:opacity-60 shadow-inner"
             />
           </div>
 
           {loading ? (
-            <div className="p-4 bg-neutral-800/70 border border-neutral-700/60 rounded-2xl text-center space-y-2">
+            <div className="p-5 liquid-glass-card border border-white/15 rounded-2xl text-center space-y-2.5">
               {success ? (
-                <div className="w-10 h-10 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center mx-auto">
-                  <Check className="w-6 h-6" />
+                <div className="w-12 h-12 rounded-full bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 flex items-center justify-center mx-auto shadow-inner">
+                  <Check className="w-7 h-7" />
                 </div>
               ) : (
-                <RefreshCw className="w-6 h-6 animate-spin text-blue-400 mx-auto" />
+                <RefreshCw className="w-7 h-7 animate-spin text-blue-400 mx-auto" />
               )}
-              <p className="text-xs font-semibold text-white">{stepText}</p>
+              <p className="text-xs font-bold text-white">{stepText}</p>
             </div>
           ) : (
             <button
               type="submit"
-              className="w-full py-3 bg-gradient-to-r from-pink-600 via-purple-600 to-indigo-600 active:opacity-90 text-white font-semibold rounded-xl text-sm shadow-lg shadow-purple-600/30 flex items-center justify-center gap-2"
+              className="w-full py-4 bg-gradient-to-r from-pink-600 via-purple-600 to-indigo-600 active:scale-98 text-white font-bold rounded-2xl text-sm shadow-xl shadow-purple-600/35 flex items-center justify-center gap-2 border border-white/20 transition-all"
             >
               <Send className="w-4 h-4" />
               <span>Tải & Đẩy Lên Kho Ảnh</span>
@@ -185,7 +185,7 @@ export const AddPhotoModal: React.FC<AddPhotoModalProps> = ({
           )}
         </form>
 
-        <div className="mt-4 pt-3 border-t border-neutral-800 text-[11px] text-neutral-500 leading-relaxed">
+        <div className="mt-4 pt-3.5 border-t border-white/10 text-xs text-neutral-400 leading-relaxed">
           💡 <b>Mẹo chia sẻ 1 chạm từ Instagram:</b> Trên ứng dụng Instagram, bạn chỉ cần bấm nút <b>Chia sẻ</b> ➔ chọn <b>Sao chép liên kết</b>, khi bạn mở lại InstaPhotos app sẽ tự động phát hiện và hỏi bạn có muốn tải ngay hay không!
         </div>
       </div>
