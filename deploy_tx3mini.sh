@@ -29,6 +29,12 @@ sudo chmod 777 /mnt/storage/insta_downloads
 
 # 4. Tạo môi trường ảo Python và cài đặt thư viện
 echo "🐍 4. Khởi tạo Python venv và cài đặt thư viện..."
+# Nếu thư mục venv được copy từ Windows (có Scripts/ thay vì bin/), xóa đi để tạo lại chuẩn Linux ARM
+if [ -d "venv/Scripts" ] || [ ! -f "venv/bin/python3" ]; then
+    echo "⚠️ Phát hiện venv cũ hoặc từ Windows, đang tạo lại venv chuẩn cho Linux ARM..."
+    rm -rf venv
+fi
+
 if [ ! -d "venv" ]; then
     python3 -m venv venv
 fi
