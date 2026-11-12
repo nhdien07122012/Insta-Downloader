@@ -23,7 +23,7 @@ export const PhotoGrid: React.FC<PhotoGridProps> = ({
   }
 
   return (
-    <div className="pb-24">
+    <div className="pb-32">
       {groups.map((group, gIdx) => (
         <section key={gIdx} className="mb-6">
           {/* Section Header (Ngày tháng) */}

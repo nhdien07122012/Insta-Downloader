@@ -682,7 +682,7 @@ export const App: React.FC = () => {
       </main>
 
       {/* Floating Action Buttons */}
-      <div className="fixed right-4 bottom-20 z-20 flex flex-col gap-2.5 items-end">
+      <div className="fixed right-4 bottom-24 z-20 flex flex-col gap-2.5 items-end">
         {/* Nút Thêm link Instagram */}
         <button
           onClick={() => {
@@ -706,8 +706,12 @@ export const App: React.FC = () => {
         </button>
       </div>
 
-      {/* iOS Bottom TabBar */}
-      <TabBar currentTab={currentTab} onTabChange={setCurrentTab} />
+      {/* iOS Bottom TabBar (Bo tròn viền kép theo ảnh mẫu) */}
+      <TabBar
+        currentTab={currentTab}
+        onTabChange={setCurrentTab}
+        onOpenSettings={() => setIsSettingsOpen(true)}
+      />
 
       {/* Modal Tải Ảnh Từ Instagram */}
       <AddPhotoModal
