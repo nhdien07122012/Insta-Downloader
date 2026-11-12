@@ -8,6 +8,9 @@ export const DEFAULT_CONFIG: TelegramConfig = {
   apiHash: localStorage.getItem("tg_api_hash") || "",
   botToken: "9259768287:AAHtvb_axOPOWrbHznw1tdok92gHjLqxY-U",
   channelId: "-1004288667686",
+  phoneNumber: localStorage.getItem("tg_phone") || "",
+  sessionString: localStorage.getItem("tg_session") || "",
+  isLoggedIn: !!localStorage.getItem("tg_session"),
 };
 
 export function getStoredConfig(): TelegramConfig {
@@ -140,7 +143,7 @@ let globalClient: any = null;
  * Khởi tạo MTProto Client qua GramJS
  */
 export async function initTelegramClient(config: TelegramConfig): Promise<any> {
-  if (globalClient) {
+  if (globalClient && globalClient.connected) {
     return globalClient;
   }
 
@@ -148,27 +151,116 @@ export async function initTelegramClient(config: TelegramConfig): Promise<any> {
     throw new Error("Chưa điền API_ID hoặc API_HASH từ my.telegram.org");
   }
 
-  // Dynamic import để tránh lỗi SSR/compile
   const { TelegramClient } = await import("telegram");
   const { StringSession } = await import("telegram/sessions");
 
-  const session = new StringSession("");
+  const session = new StringSession(config.sessionString || "");
   const client = new TelegramClient(
     session,
     parseInt(config.apiId, 10),
     config.apiHash,
     {
       connectionRetries: 5,
-      useWSS: true, // Kết nối an toàn qua WSS cho trình duyệt di động
+      useWSS: true,
     }
   );
 
-  await client.start({
-    botAuthToken: config.botToken,
-  });
+  await client.connect();
+
+  if (!config.sessionString && config.botToken) {
+    try {
+      await client.start({
+        botAuthToken: config.botToken,
+      });
+    } catch (e) {
+      console.warn("Khởi động bot token MTProto:", e);
+    }
+  }
 
   globalClient = client;
   return client;
+}
+
+/**
+ * Gửi mã xác nhận Telegram về điện thoại (MTProto Login)
+ */
+export async function requestTelegramCode(
+  apiId: string,
+  apiHash: string,
+  phoneNumber: string
+): Promise<{ phoneCodeHash: string }> {
+  const { TelegramClient } = await import("telegram");
+  const { StringSession } = await import("telegram/sessions");
+
+  const client = new TelegramClient(
+    new StringSession(""),
+    parseInt(apiId, 10),
+    apiHash,
+    { connectionRetries: 5, useWSS: true }
+  );
+
+  await client.connect();
+  const res = await client.sendCode(
+    {
+      apiId: parseInt(apiId, 10),
+      apiHash,
+    },
+    phoneNumber
+  );
+
+  globalClient = client;
+  return { phoneCodeHash: res.phoneCodeHash };
+}
+
+/**
+ * Xác thực mã đăng nhập và lưu phiên (Session)
+ */
+export async function verifyTelegramCode(
+  phoneNumber: string,
+  phoneCodeHash: string,
+  code: string,
+  password?: string
+): Promise<string> {
+  if (!globalClient) {
+    throw new Error("Client chưa khởi tạo");
+  }
+
+  const { Api } = await import("telegram");
+
+  try {
+    await globalClient.invoke(
+      new Api.auth.SignIn({
+        phoneNumber,
+        phoneCodeHash,
+        phoneCode: code,
+      })
+    );
+  } catch (err: any) {
+    if (err.errorMessage === "SESSION_PASSWORD_NEEDED" && password) {
+      await globalClient.signInWithPassword({
+        password: async () => password,
+      });
+    } else {
+      throw err;
+    }
+  }
+
+  const sessionString = globalClient.session.save();
+  localStorage.setItem("tg_session", sessionString);
+  return sessionString;
+}
+
+/**
+ * Đăng xuất Telegram
+ */
+export async function logoutTelegram(): Promise<void> {
+  if (globalClient) {
+    try {
+      await globalClient.disconnect();
+    } catch {}
+    globalClient = null;
+  }
+  localStorage.removeItem("tg_session");
 }
 
 /**

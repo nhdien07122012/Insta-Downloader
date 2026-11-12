@@ -25,4 +25,7 @@ export interface TelegramConfig {
   apiHash: string;
   botToken: string;
   channelId: string;
+  phoneNumber?: string;
+  sessionString?: string;
+  isLoggedIn?: boolean;
 }
