@@ -5,7 +5,7 @@ Toàn bộ các phiên bản cập nhật, mã bản dựng (build number), chi 
 ---
 
 ## [v1.2 (Build 4)] - 2026-11-12
-- **Commit SHA**: *(Commit hiện tại)*
+- **Commit SHA**: `ad1db78`
 - **Mục tiêu**: Xây dựng kiến trúc Offline-First lưu trữ bộ nhớ đệm ảnh vĩnh viễn (IndexedDB Persistent Cache), giúp mở app hiển thị ảnh ngay lập tức (<50ms), đồng bộ ngầm chỉ tải ảnh mới từ Telegram và thêm nút dọn dẹp cache trong Cài đặt.
 - **Chi tiết thay đổi**:
   - `ios-photo-app/src/services/photoStorage.ts`: Khởi tạo module lưu trữ IndexedDB chuyên biệt (`InstaPhotosCacheDB`), hỗ trợ đọc ảnh cực nhanh, lưu thumbnail và HD binary, tính dung lượng MB và xóa cache.
