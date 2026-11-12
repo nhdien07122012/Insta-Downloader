@@ -268,18 +268,32 @@ export async function logoutTelegram(): Promise<void> {
  */
 export async function fetchChannelPhotos(
   config: TelegramConfig,
-  limit: number = 50
+  limit: number = 60
 ): Promise<PhotoItem[]> {
-  // Nếu chưa cấu hình API_ID, trả về danh sách mẫu để người dùng trải nghiệm ngay UI
   if (!config.apiId || !config.apiHash) {
     return SAMPLE_PHOTOS;
   }
 
+  if (!config.sessionString && !config.isLoggedIn) {
+    throw new Error(
+      "CHUA_DANG_NHAP: Bạn cần đăng nhập tài khoản Telegram bằng số điện thoại để đọc ảnh từ Kênh lưu trữ."
+    );
+  }
+
   try {
     const client = await initTelegramClient(config);
-    const channelEntity = parseInt(config.channelId, 10) || config.channelId;
+    let targetPeer: any = config.channelId;
+    try {
+      targetPeer = await client.getEntity(config.channelId);
+    } catch {
+      try {
+        targetPeer = await client.getEntity(BigInt(config.channelId));
+      } catch {
+        targetPeer = config.channelId;
+      }
+    }
 
-    const messages = await client.getMessages(channelEntity, { limit });
+    const messages = await client.getMessages(targetPeer, { limit });
     const photos: PhotoItem[] = [];
 
     for (const msg of messages) {
@@ -291,11 +305,11 @@ export async function fetchChannelPhotos(
 
       // Nếu là ảnh (Photo)
       if (msg.media.photo) {
-        // Tải ảnh trực tiếp vào Blob URL
         let photoUrl = mediaCache.get(msg.id);
         if (!photoUrl) {
           try {
-            const buffer = await client.downloadMedia(msg.media, { workers: 1 });
+            // Tải thumbnail cỡ vừa (thumb: 1) siêu nhanh để hiển thị ngay tức thì
+            const buffer = await client.downloadMedia(msg.media, { thumb: 1 });
             if (buffer) {
               const blob = new Blob([buffer], { type: "image/jpeg" });
               photoUrl = URL.createObjectURL(blob);
@@ -322,10 +336,9 @@ export async function fetchChannelPhotos(
       }
     }
 
-    return photos.length > 0 ? photos : SAMPLE_PHOTOS;
-  } catch (error) {
+    return photos;
+  } catch (error: any) {
     console.error("Lỗi kết nối Telegram MTProto:", error);
-    // Fallback về sample photos nếu chưa kết nối được
-    return SAMPLE_PHOTOS;
+    throw error;
   }
 }

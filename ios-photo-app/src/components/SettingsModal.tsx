@@ -33,7 +33,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onSave,
 }) => {
   const [formData, setFormData] = useState<TelegramConfig>(config);
-  const [activeTab, setActiveTab] = useState<"api" | "login">("api");
+  const [activeTab, setActiveTab] = useState<"api" | "login">(
+    config.apiId && config.apiHash && !config.isLoggedIn ? "login" : "api"
+  );
   const [phone, setPhone] = useState(config.phoneNumber || "");
   const [phoneCodeHash, setPhoneCodeHash] = useState("");
   const [code, setCode] = useState("");
@@ -126,10 +128,18 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     e.preventDefault();
     onSave(formData);
     setSavedSuccess(true);
-    setTimeout(() => {
-      setSavedSuccess(false);
-      onClose();
-    }, 800);
+    if (!formData.isLoggedIn && formData.apiId && formData.apiHash) {
+      setTimeout(() => {
+        setSavedSuccess(false);
+        setActiveTab("login");
+        setStatusMsg("Đã lưu API ID & Hash! Tiếp theo hãy nhập Số điện thoại để nhận mã xác thực Telegram.");
+      }, 500);
+    } else {
+      setTimeout(() => {
+        setSavedSuccess(false);
+        onClose();
+      }, 800);
+    }
   };
 
   return (

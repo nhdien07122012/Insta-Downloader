@@ -10,12 +10,13 @@ import { PhotoGrid } from "./components/PhotoGrid";
 import { PhotoViewer } from "./components/PhotoViewer";
 import { TabBar } from "./components/TabBar";
 import { SettingsModal } from "./components/SettingsModal";
-import { RefreshCw, Search, Folder, Sparkles } from "lucide-react";
+import { RefreshCw, Search, Folder, Sparkles, ShieldCheck, ChevronRight, AlertCircle } from "lucide-react";
 
 export const App: React.FC = () => {
   const [config, setConfig] = useState<TelegramConfig>(getStoredConfig);
   const [photos, setPhotos] = useState<PhotoItem[]>([]);
   const [loading, setLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
   const [selectedPhoto, setSelectedPhoto] = useState<PhotoItem | null>(null);
   const [currentTab, setCurrentTab] = useState("library");
   const [activeFilter, setActiveFilter] = useState("Tất cả");
@@ -24,19 +25,27 @@ export const App: React.FC = () => {
 
   const loadPhotos = async () => {
     setLoading(true);
+    setErrorMessage("");
     try {
       const data = await fetchChannelPhotos(config, 60);
       setPhotos(data);
-    } catch (e) {
+    } catch (e: any) {
       console.error(e);
+      if (e.message && e.message.includes("CHUA_DANG_NHAP")) {
+        setErrorMessage("Chưa đăng nhập Telegram cá nhân. Vui lòng bấm Cài đặt và nhập SĐT.");
+      } else {
+        setErrorMessage(e.message || "Lỗi tải ảnh từ Telegram");
+      }
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    loadPhotos();
-  }, [config.apiId, config.apiHash]);
+    if (config.isLoggedIn || config.sessionString) {
+      loadPhotos();
+    }
+  }, [config.apiId, config.apiHash, config.sessionString, config.isLoggedIn]);
 
   // Lọc ảnh theo Filter và Search Query
   const filteredPhotos = useMemo(() => {
@@ -114,6 +123,43 @@ export const App: React.FC = () => {
 
       {/* Main Content Area */}
       <main className="max-w-md mx-auto min-h-[calc(100vh-140px)]">
+        {/* Banner Chưa đăng nhập Telegram */}
+        {!config.isLoggedIn && (
+          <div
+            onClick={() => setIsSettingsOpen(true)}
+            className="mx-4 mt-3 mb-2 p-3.5 bg-gradient-to-r from-blue-900/60 to-indigo-900/60 border border-blue-500/40 rounded-2xl flex items-center justify-between cursor-pointer active:scale-98 transition-transform shadow-lg"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-blue-500/20 text-blue-400 flex items-center justify-center shrink-0">
+                <ShieldCheck className="w-5 h-5" />
+              </div>
+              <div>
+                <div className="text-xs font-bold text-white">Chưa đăng nhập Telegram</div>
+                <div className="text-[11px] text-blue-200 mt-0.5">
+                  Bấm vào đây để nhập SĐT & nhận mã OTP kết nối kênh
+                </div>
+              </div>
+            </div>
+            <ChevronRight className="w-4 h-4 text-blue-300 shrink-0" />
+          </div>
+        )}
+
+        {/* Thông báo lỗi nếu có */}
+        {errorMessage && (
+          <div className="mx-4 my-2 p-3 bg-red-950/70 border border-red-800/60 rounded-xl text-xs text-red-300 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 text-red-400 shrink-0" />
+              <span>{errorMessage}</span>
+            </div>
+            <button
+              onClick={loadPhotos}
+              className="ml-2 px-2.5 py-1 bg-red-900/80 rounded-lg text-white font-medium active:bg-red-800 shrink-0"
+            >
+              Thử lại
+            </button>
+          </div>
+        )}
+
         {/* Tab Tìm kiếm (Search) */}
         {currentTab === "search" && (
           <div className="p-4 animate-in fade-in duration-200">
