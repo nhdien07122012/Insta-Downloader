@@ -5,7 +5,7 @@ Toàn bộ các phiên bản cập nhật, mã bản dựng (build number), chi 
 ---
 
 ## [v1.1 (Build 3)] - 2026-11-12
-- **Commit SHA**: *(Commit hiện tại)*
+- **Commit SHA**: `c808388`
 - **Mục tiêu**: Hạ thấp thanh TabBar xuống sát thanh home indicator chuẩn iOS, loại bỏ dải màu gradient của nút `+`, chuyển nút `+` sang phong cách kính tối màu (dark frosted glass) đồng bộ kích thước $56\times56\text{px}$ và xếp thẳng hàng theo cột dọc với nút Tìm kiếm.
 - **Chi tiết thay đổi**:
   - `ios-photo-app/src/components/TabBar.tsx`:
