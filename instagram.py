@@ -1,11 +1,12 @@
 import os
 import re
+import sys
+import json
 import shutil
 import asyncio
+import subprocess
 from pathlib import Path
 from typing import List, Dict, Any, Optional
-import instaloader
-import yt_dlp
 
 from config import (
     BASE_DIR,
@@ -32,37 +33,7 @@ def extract_shortcode(url_or_text: str) -> Optional[str]:
 
 class InstagramDownloader:
     def __init__(self):
-        self.loader = instaloader.Instaloader(
-            download_pictures=True,
-            download_videos=True,
-            download_video_thumbnails=False,
-            download_geotags=False,
-            download_comments=False,
-            save_metadata=False,
-            compress_json=False,
-            post_metadata_txt_pattern="",
-        )
-        self._setup_session()
-
-    def _setup_session(self):
-        """Cấu hình session/cookie nếu có."""
-        # Kiểm tra file cookies.txt
-        if os.path.exists(COOKIES_FILE):
-            try:
-                # yt-dlp và instaloader đều có thể dùng cookies.txt
-                # Với instaloader, đọc cookie netscape hoặc sessionid
-                import http.cookiejar
-                cj = http.cookiejar.MozillaCookieJar(COOKIES_FILE)
-                cj.load(ignore_discard=True, ignore_expires=True)
-                self.loader.context._session.cookies = cj
-            except Exception as e:
-                print(f"[Warning] Không thể nạp cookies.txt: {e}")
-
-        # Hoặc dùng sessionid trực tiếp từ .env
-        elif INSTAGRAM_SESSION_ID:
-            self.loader.context._session.cookies.set(
-                "sessionid", INSTAGRAM_SESSION_ID, domain=".instagram.com"
-            )
+        pass
 
     async def download_post(self, url: str) -> Dict[str, Any]:
         """
@@ -80,42 +51,80 @@ class InstagramDownloader:
         target_dir = DOWNLOAD_DIR / shortcode
         target_dir.mkdir(parents=True, exist_ok=True)
 
-        # Thử Phương pháp 1: Instaloader
-        try:
-            return self._download_with_instaloader(shortcode, target_dir)
-        except Exception as e_insta:
-            print(f"[Instaloader Error] {e_insta}. Đang thử yt-dlp...")
+        clean_url = f"https://www.instagram.com/p/{shortcode}/"
 
-        # Thử Phương pháp 2: yt-dlp
+        # Phương pháp 1: gallery-dl (Tối ưu nhất cho ảnh, album/carousel và video Instagram)
         try:
-            return self._download_with_ytdlp(url, shortcode, target_dir)
+            return self._download_with_gallery_dl(clean_url, shortcode, target_dir)
+        except Exception as e_gdl:
+            print(f"[gallery-dl Error] {e_gdl}. Đang thử phương pháp dự phòng...")
+
+        # Phương pháp 2: yt-dlp (Tốt cho Reels và Video)
+        try:
+            return self._download_with_ytdlp(clean_url, shortcode, target_dir)
         except Exception as e_yt:
             print(f"[yt-dlp Error] {e_yt}")
 
-        # Thử Phương pháp 3: RapidAPI nếu có cấu hình
+        # Phương pháp 3: RapidAPI nếu có cấu hình
         if RAPIDAPI_KEY:
             try:
-                return self._download_with_rapidapi(url, shortcode, target_dir)
+                return self._download_with_rapidapi(clean_url, shortcode, target_dir)
             except Exception as e_api:
                 print(f"[RapidAPI Error] {e_api}")
 
-        # Nếu cả 3 đều thất bại do Instagram chặn
+        # Nếu tất cả đều thất bại
         raise RuntimeError(
             "Không thể tải ảnh từ Instagram. "
-            "Instagram hiện yêu cầu đăng nhập/cookie đối với các yêu cầu tự động. "
-            "Vui lòng thêm file 'cookies.txt' hoặc 'INSTAGRAM_SESSION_ID' trong file .env."
+            "Vui lòng kiểm tra lại file 'cookies.txt' để đảm bảo cookie Instagram vẫn còn hạn."
         )
 
-    def _download_with_instaloader(self, shortcode: str, target_dir: Path) -> Dict[str, Any]:
-        post = instaloader.Post.from_shortcode(self.loader.context, shortcode)
+    def _download_with_gallery_dl(self, url: str, shortcode: str, target_dir: Path) -> Dict[str, Any]:
+        """Tải ảnh và video chất lượng gốc bằng gallery-dl."""
+        # 1. Lấy metadata trước
+        json_cmd = [
+            sys.executable, "-m", "gallery_dl",
+            "-j",
+            url,
+        ]
+        if os.path.exists(COOKIES_FILE):
+            json_cmd.extend(["--cookies", COOKIES_FILE])
 
-        # Download các file của post vào target_dir
-        self.loader.dirname_pattern = str(target_dir)
-        self.loader.download_post(post, target=str(target_dir))
+        res_json = subprocess.run(json_cmd, capture_output=True, text=True, encoding="utf-8")
+        author = ""
+        caption = ""
 
-        # Tìm các file ảnh / video đã tải
+        if res_json.returncode == 0 and res_json.stdout.strip():
+            try:
+                data = json.loads(res_json.stdout)
+                for item in data:
+                    if isinstance(item, list) and len(item) >= 2 and item[0] == 2:
+                        meta = item[1]
+                        author = meta.get("username", "") or meta.get("fullname", "")
+                        caption = meta.get("description", "") or ""
+                        break
+            except Exception as e:
+                print(f"[Warning] Parse metadata gallery-dl error: {e}")
+
+        # 2. Tải các file media về target_dir
+        dl_cmd = [
+            sys.executable, "-m", "gallery_dl",
+            "-D", str(target_dir),
+            "--filename", "{num}_{filename}.{extension}",
+            "--no-part",
+            url,
+        ]
+        if os.path.exists(COOKIES_FILE):
+            dl_cmd.extend(["--cookies", COOKIES_FILE])
+
+        res_dl = subprocess.run(dl_cmd, capture_output=True, text=True, encoding="utf-8")
+        if res_dl.returncode != 0:
+            err_msg = res_dl.stderr.strip() or res_dl.stdout.strip()
+            raise RuntimeError(f"gallery-dl download failed: {err_msg}")
+
+        # 3. Thu thập danh sách file đã tải
         media_files = []
-        for file in sorted(target_dir.iterdir()):
+        # Quét tất cả file trong target_dir (và cả thư mục con nếu gallery-dl tạo)
+        for file in sorted(target_dir.rglob("*.*")):
             if file.suffix.lower() in [".jpg", ".jpeg", ".png", ".webp"]:
                 media_files.append({"path": str(file), "type": "photo"})
             elif file.suffix.lower() in [".mp4", ".mov"]:
@@ -124,12 +133,9 @@ class InstagramDownloader:
         if not media_files:
             raise RuntimeError("Không tìm thấy file ảnh hoặc video nào được tải về.")
 
-        caption = post.caption if post.caption else ""
-        author = post.owner_username if post.owner_username else ""
-
         return {
             "shortcode": shortcode,
-            "url": f"https://www.instagram.com/p/{shortcode}/",
+            "url": url,
             "author": author,
             "caption": caption,
             "media_files": media_files,
@@ -137,6 +143,7 @@ class InstagramDownloader:
         }
 
     def _download_with_ytdlp(self, url: str, shortcode: str, target_dir: Path) -> Dict[str, Any]:
+        import yt_dlp
         outtmpl = str(target_dir / "%(id)s_%(autonumber)s.%(ext)s")
         ydl_opts = {
             "outtmpl": outtmpl,
@@ -152,7 +159,7 @@ class InstagramDownloader:
             author = info.get("uploader", "") or info.get("channel", "")
 
         media_files = []
-        for file in sorted(target_dir.iterdir()):
+        for file in sorted(target_dir.rglob("*.*")):
             if file.suffix.lower() in [".jpg", ".jpeg", ".png", ".webp"]:
                 media_files.append({"path": str(file), "type": "photo"})
             elif file.suffix.lower() in [".mp4", ".mov"]:
@@ -163,7 +170,7 @@ class InstagramDownloader:
 
         return {
             "shortcode": shortcode,
-            "url": f"https://www.instagram.com/p/{shortcode}/",
+            "url": url,
             "author": author,
             "caption": caption,
             "media_files": media_files,

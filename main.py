@@ -4,6 +4,7 @@ import shutil
 import asyncio
 import logging
 from pathlib import Path
+from telegram import Update
 
 from config import (
     BASE_DIR,
@@ -56,13 +57,13 @@ async def async_main():
     print("\n" + "-" * 50)
     print("🚀 INSTAGRAM TELEGRAM STORAGE BOT ĐÃ KHỞI CHẠY!")
     print(f"📦 Kênh lưu trữ: {TELEGRAM_STORAGE_CHANNEL_ID or 'Lưu tại chat riêng'}")
-    print("📱 Sẵn sàng nhận link từ iPhone (Share Sheet / Telegram App)")
+    print("📱 Sẵn sàng nhận link từ iPhone (Chat với Bot hoặc dán thẳng vào Kênh)")
     print("-" * 50 + "\n")
 
-    # 3. Chạy bot polling
+    # 3. Chạy bot polling với tất cả loại update (gồm cả tin nhắn riêng và bài đăng kênh)
     await app.initialize()
     await app.start()
-    await app.updater.start_polling(allowed_updates=["message", "callback_query"])
+    await app.updater.start_polling(allowed_updates=Update.ALL_TYPES)
 
     # Giữ bot chạy liên tục
     stop_event = asyncio.Event()
