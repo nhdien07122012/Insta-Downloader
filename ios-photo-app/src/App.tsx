@@ -81,6 +81,8 @@ export const App: React.FC = () => {
         ) {
           const lastProcessed = localStorage.getItem("last_clipboard_insta");
           if (lastProcessed !== value.trim()) {
+            setAddUrl(value.trim());
+            setIsAddModalOpen(true);
             setClipboardPrompt(value.trim());
           }
         }
@@ -88,6 +90,14 @@ export const App: React.FC = () => {
     };
 
     checkClipboard();
+
+    try {
+      CapApp.addListener("appStateChange", (state) => {
+        if (state.isActive) {
+          checkClipboard();
+        }
+      });
+    } catch {}
   }, []);
 
   // Danh sách ảnh yêu thích lưu trong LocalStorage
