@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import type { TelegramConfig } from "../types";
 import {
   X,
@@ -12,18 +12,22 @@ import {
   Lock,
   LogOut,
   RefreshCw,
+  Database,
+  Trash2,
 } from "lucide-react";
 import {
   requestTelegramCode,
   verifyTelegramCode,
   logoutTelegram,
 } from "../services/telegramClient";
+import { getCacheStats, clearPhotoCache } from "../services/photoStorage";
 
 interface SettingsModalProps {
   isOpen: boolean;
   onClose: () => void;
   config: TelegramConfig;
   onSave: (config: TelegramConfig) => void;
+  onCacheCleared?: () => void;
 }
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({
@@ -31,6 +35,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onClose,
   config,
   onSave,
+  onCacheCleared,
 }) => {
   const [formData, setFormData] = useState<TelegramConfig>(config);
   const [activeTab, setActiveTab] = useState<"api" | "login">(
@@ -44,6 +49,23 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [loading, setLoading] = useState(false);
   const [statusMsg, setStatusMsg] = useState("");
   const [savedSuccess, setSavedSuccess] = useState(false);
+  const [cacheStats, setCacheStats] = useState<{ count: number; sizeMB: string }>({
+    count: 0,
+    sizeMB: "0",
+  });
+
+  useEffect(() => {
+    if (isOpen) {
+      getCacheStats().then(setCacheStats);
+    }
+  }, [isOpen]);
+
+  const handleClearCache = async () => {
+    await clearPhotoCache();
+    setCacheStats({ count: 0, sizeMB: "0" });
+    setStatusMsg("Đã dọn dẹp sạch bộ nhớ đệm ảnh!");
+    if (onCacheCleared) onCacheCleared();
+  };
 
   if (!isOpen) return null;
 
@@ -407,10 +429,40 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           </div>
         )}
 
+        {/* Quản lý Bộ nhớ đệm ảnh (Offline Cache) */}
+        <div className="mt-5 pt-4 border-t border-neutral-850">
+          <div className="flex items-center justify-between mb-2">
+            <div>
+              <h4 className="text-sm font-semibold text-white flex items-center gap-1.5">
+                <Database className="w-4 h-4 text-blue-400" />
+                Bộ nhớ đệm ảnh (Offline)
+              </h4>
+              <p className="text-xs text-neutral-400 mt-0.5">
+                {cacheStats.count > 0
+                  ? `${cacheStats.count} ảnh trong máy (${cacheStats.sizeMB} MB)`
+                  : "Chưa có ảnh nào lưu trong máy"}
+              </p>
+            </div>
+            {cacheStats.count > 0 && (
+              <button
+                type="button"
+                onClick={handleClearCache}
+                className="px-3 py-1.5 text-xs font-semibold text-red-400 bg-red-950/40 border border-red-800/50 rounded-xl active:bg-red-900/60 transition-colors flex items-center gap-1"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                Xóa cache
+              </button>
+            )}
+          </div>
+          <p className="text-[11px] text-neutral-500 leading-relaxed">
+            Ảnh được lưu trực tiếp trên iPhone để mở ứng dụng xem ngay tức thì mà không cần tải lại từ Telegram.
+          </p>
+        </div>
+
         {/* Footer App Version & Build */}
         <div className="pt-4 pb-1 text-center border-t border-neutral-800/80">
           <p className="text-[11px] text-neutral-500 font-medium">
-            InstaPhotos v1.1 • Build 3
+            InstaPhotos v1.2 • Build 4
           </p>
         </div>
       </div>

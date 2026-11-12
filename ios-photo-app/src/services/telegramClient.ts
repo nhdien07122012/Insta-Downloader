@@ -1,4 +1,11 @@
 import type { PhotoItem, TelegramConfig } from "../types";
+import {
+  getCachedPhotosFromDB,
+  getCachedMessageIds,
+  savePhotoToCache,
+  getCachedHdPhoto,
+  saveHdPhotoToCache,
+} from "./photoStorage";
 
 // Khóa lưu cấu hình trong LocalStorage
 const CONFIG_STORAGE_KEY = "insta_photos_tg_config";
@@ -28,9 +35,6 @@ export function getStoredConfig(): TelegramConfig {
 export function saveStoredConfig(config: TelegramConfig) {
   localStorage.setItem(CONFIG_STORAGE_KEY, JSON.stringify(config));
 }
-
-// Bộ nhớ cache tạm trong RAM để không tải lại ảnh đã tải
-const mediaCache = new Map<number, string>();
 
 /**
  * Trích xuất tác giả và caption từ nội dung tin nhắn bot đã đăng
@@ -267,11 +271,11 @@ export async function logoutTelegram(): Promise<void> {
 }
 
 /**
- * Lấy danh sách ảnh trực tiếp từ Kênh Telegram
+ * Lấy danh sách ảnh trực tiếp từ Kênh Telegram với hỗ trợ IndexedDB Persistent Cache
  */
 export async function fetchChannelPhotos(
   config: TelegramConfig,
-  limit: number = 60
+  limit: number = 80
 ): Promise<PhotoItem[]> {
   if (!config.apiId || !config.apiHash) {
     return SAMPLE_PHOTOS;
@@ -296,68 +300,70 @@ export async function fetchChannelPhotos(
       }
     }
 
-    const messages = await client.getMessages(targetPeer, { limit });
-    const photos: PhotoItem[] = [];
+    // 1. Kiểm tra danh sách messageId đã lưu trong IndexedDB máy
+    const cachedIds = await getCachedMessageIds();
 
+    // 2. Lấy danh sách tin nhắn mới từ Telegram
+    const messages = await client.getMessages(targetPeer, { limit });
+
+    // 3. Tải thumbnail CHO CÁC TIN NHẮN MỚI CHƯA CÓ TRONG CACHE
     for (const msg of messages) {
-      if (!msg.media) continue;
+      if (!msg.media || !msg.media.photo) continue;
+
+      // Nếu đã có trong IndexedDB, bỏ qua không tải lại
+      if (cachedIds.has(msg.id)) continue;
 
       const { author, caption, originalUrl } = parseCaptionAndAuthor(
         msg.message || ""
       );
 
-      // Nếu là ảnh (Photo)
-      if (msg.media.photo) {
-        let photoUrl = mediaCache.get(msg.id);
-        if (!photoUrl) {
-          try {
-            // Tải thumbnail sắc nét (thumb: 2 ~800px) cho Retina màn hình iPhone
-            const buffer = await client.downloadMedia(msg.media, { thumb: 2 });
-            if (buffer) {
-              const blob = new Blob([buffer], { type: "image/jpeg" });
-              photoUrl = URL.createObjectURL(blob);
-              mediaCache.set(msg.id, photoUrl);
-            }
-          } catch (e) {
-            console.warn(`Lỗi tải media tin nhắn ${msg.id}:`, e);
-          }
-        }
-
-        if (photoUrl) {
-          photos.push({
-            id: `tg-${msg.id}`,
+      try {
+        // Tải thumbnail sắc nét (thumb: 2 ~800px) cho Retina màn hình iPhone
+        const buffer = await client.downloadMedia(msg.media, { thumb: 2 });
+        if (buffer) {
+          await savePhotoToCache({
             messageId: msg.id,
-            url: photoUrl,
-            thumbnailUrl: photoUrl,
+            id: `tg-${msg.id}`,
+            thumbnailData: buffer,
             author,
             caption,
             originalUrl,
             groupedId: msg.groupedId ? String(msg.groupedId) : undefined,
-            date: new Date(msg.date * 1000),
+            timestamp: msg.date * 1000,
             isCarousel: msg.groupedId != null,
           });
+          cachedIds.add(msg.id);
         }
+      } catch (e) {
+        console.warn(`Lỗi tải media tin nhắn ${msg.id}:`, e);
       }
     }
 
-    return photos;
+    // 4. Trả về toàn bộ ảnh từ IndexedDB (cực kỳ nhanh, đúng thứ tự)
+    const allPhotos = await getCachedPhotosFromDB();
+    return allPhotos;
   } catch (error: any) {
     console.error("Lỗi kết nối Telegram MTProto:", error);
+    // Nếu gặp lỗi mạng, trả về ảnh đã có trong IndexedDB để người dùng vẫn xem được
+    const fallbackPhotos = await getCachedPhotosFromDB();
+    if (fallbackPhotos.length > 0) {
+      return fallbackPhotos;
+    }
     throw error;
   }
 }
 
-const fullResolutionCache = new Map<number, string>();
-
 /**
- * Tải ảnh gốc độ phân giải cao nhất (HD Full Resolution) từ Telegram CDN
+ * Tải ảnh gốc độ phân giải cao nhất (HD Full Resolution) từ Telegram CDN hoặc IndexedDB
  */
 export async function fetchFullResolutionPhoto(
   config: TelegramConfig,
   messageId: number
 ): Promise<string | null> {
-  if (fullResolutionCache.has(messageId)) {
-    return fullResolutionCache.get(messageId)!;
+  // 1. Kiểm tra cache IndexedDB trước (mở tức thì)
+  const cachedHd = await getCachedHdPhoto(messageId);
+  if (cachedHd) {
+    return cachedHd;
   }
 
   try {
@@ -374,9 +380,7 @@ export async function fetchFullResolutionPhoto(
       // Tải ảnh nguyên bản không nén (100% gốc HD/4K)
       const buffer = await client.downloadMedia(messages[0].media);
       if (buffer) {
-        const blob = new Blob([buffer], { type: "image/jpeg" });
-        const hdUrl = URL.createObjectURL(blob);
-        fullResolutionCache.set(messageId, hdUrl);
+        const hdUrl = await saveHdPhotoToCache(messageId, buffer);
         return hdUrl;
       }
     }

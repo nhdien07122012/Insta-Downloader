@@ -5,6 +5,7 @@ import {
   saveStoredConfig,
   fetchChannelPhotos,
 } from "./services/telegramClient";
+import { getCachedPhotosFromDB } from "./services/photoStorage";
 import { Header } from "./components/Header";
 import { PhotoGrid } from "./components/PhotoGrid";
 import { PhotoViewer } from "./components/PhotoViewer";
@@ -159,8 +160,20 @@ export const App: React.FC = () => {
     });
   };
 
-  const loadPhotos = async () => {
-    setLoading(true);
+  // Giai đoạn 1: Đọc ảnh từ IndexedDB hiển thị tức thì (< 50ms)
+  useEffect(() => {
+    getCachedPhotosFromDB().then((cached) => {
+      if (cached && cached.length > 0) {
+        setPhotos(cached);
+      }
+    });
+  }, []);
+
+  const loadPhotos = async (isBackground = false) => {
+    // Chỉ bật vòng xoay loading nếu chưa có ảnh nào trong máy
+    if (!isBackground && photos.length === 0) {
+      setLoading(true);
+    }
     setErrorMessage("");
     try {
       const data = await fetchChannelPhotos(config, 80);
@@ -170,7 +183,9 @@ export const App: React.FC = () => {
       if (e.message && e.message.includes("CHUA_DANG_NHAP")) {
         setErrorMessage("Chưa đăng nhập Telegram cá nhân. Vui lòng bấm Cài đặt và nhập SĐT.");
       } else {
-        setErrorMessage(e.message || "Lỗi tải ảnh từ Telegram");
+        if (photos.length === 0) {
+          setErrorMessage(e.message || "Lỗi tải ảnh từ Telegram");
+        }
       }
     } finally {
       setLoading(false);
@@ -179,7 +194,8 @@ export const App: React.FC = () => {
 
   useEffect(() => {
     if (config.isLoggedIn || config.sessionString) {
-      loadPhotos();
+      // Mở app: Đồng bộ ngầm ảnh mới từ Telegram
+      loadPhotos(true);
     }
   }, [config.apiId, config.apiHash, config.sessionString, config.isLoggedIn]);
 
@@ -415,7 +431,7 @@ export const App: React.FC = () => {
               <span>{errorMessage}</span>
             </div>
             <button
-              onClick={loadPhotos}
+              onClick={() => loadPhotos(false)}
               className="ml-2 px-2.5 py-1 bg-red-900/80 rounded-lg text-white font-medium active:bg-red-800 shrink-0"
             >
               Thử lại
@@ -788,6 +804,7 @@ export const App: React.FC = () => {
         onClose={() => setIsSettingsOpen(false)}
         config={config}
         onSave={handleSaveConfig}
+        onCacheCleared={() => setPhotos([])}
       />
     </div>
   );
