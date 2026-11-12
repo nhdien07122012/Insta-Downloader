@@ -17,7 +17,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
 
       - name: Install Dependencies
         run: |
@@ -37,6 +37,7 @@ jobs:
       - name: Build iOS App with Xcode
         run: |
           cd ios-photo-app/ios/App
+          xcodebuild -resolvePackageDependencies -project App.xcodeproj
           xcodebuild clean build \
             -project App.xcodeproj \
             -scheme App \
@@ -51,7 +52,7 @@ jobs:
         run: |
           cd ios-photo-app/ios/App
           mkdir -p Payload
-          cp -r derived_data/Build/Products/Release-iphoneos/App.app Payload/InstaPhotos.app
+          cp -r derived_data/Build/Products/Release-iphoneos/App.app Payload/App.app
           zip -qr InstaPhotos.ipa Payload
           echo "=== IPA File Created ==="
           ls -lh InstaPhotos.ipa
