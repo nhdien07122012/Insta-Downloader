@@ -9,6 +9,7 @@ from telegram import (
     InputMediaPhoto,
     InputMediaVideo,
 )
+from telegram.request import HTTPXRequest
 from telegram.constants import ParseMode, ChatType
 from telegram.ext import (
     Application,
@@ -185,6 +186,15 @@ async def handle_instagram_message(update: Update, context: ContextTypes.DEFAULT
         download_result = await downloader.download_post(text)
         media_files = download_result["media_files"]
 
+        # Xóa ngay tin nhắn chứa link sau khi đã tải ảnh về máy thành công
+        # Đảm bảo tin nhắn link biến mất ngay lập tức, không phụ thuộc vào thời gian upload
+        if is_channel or DELETE_LINK_MESSAGE:
+            try:
+                await context.bot.delete_message(chat_id=msg.chat_id, message_id=msg.message_id)
+                logger.info(f"🗑️ Đã xóa tin nhắn link gốc (ID: {msg.message_id})")
+            except Exception as e_del:
+                logger.warning(f"⚠️ Không thể xóa tin nhắn link (ID: {msg.message_id}): {e_del}")
+
         if status_msg:
             await status_msg.edit_text(
                 f"⏳ Đã tải xong <b>{len(media_files)}</b> tệp. Đang đẩy lên Kênh lưu trữ Telegram...",
@@ -228,6 +238,8 @@ async def handle_instagram_message(update: Update, context: ContextTypes.DEFAULT
                         photo=f,
                         caption=caption_storage,
                         parse_mode=ParseMode.HTML,
+                        write_timeout=120.0,
+                        read_timeout=120.0,
                     )
                     file_id = m_sent.photo[-1].file_id
                     file_unique_id = m_sent.photo[-1].file_unique_id
@@ -240,6 +252,8 @@ async def handle_instagram_message(update: Update, context: ContextTypes.DEFAULT
                         video=f,
                         caption=caption_storage,
                         parse_mode=ParseMode.HTML,
+                        write_timeout=120.0,
+                        read_timeout=120.0,
                     )
                     file_id = m_sent.video.file_id
                     file_unique_id = m_sent.video.file_unique_id
@@ -280,6 +294,8 @@ async def handle_instagram_message(update: Update, context: ContextTypes.DEFAULT
                     msgs = await context.bot.send_media_group(
                         chat_id=destination_chat_id,
                         media=media_group,
+                        write_timeout=120.0,
+                        read_timeout=120.0,
                     )
                     sent_messages.extend(msgs)
 
@@ -377,7 +393,15 @@ def create_bot_application() -> Application:
             "Chưa cấu hình TELEGRAM_BOT_TOKEN! Hãy tạo file .env và điền Token từ @BotFather."
         )
 
-    app = Application.builder().token(TELEGRAM_BOT_TOKEN).build()
+    # Tăng timeout lên 120 giây để TX3 Mini upload các album ảnh 4K/video nặng qua Wi-Fi không bị ngắt TimedOut
+    request = HTTPXRequest(
+        connect_timeout=30.0,
+        read_timeout=120.0,
+        write_timeout=120.0,
+        pool_timeout=30.0,
+    )
+
+    app = Application.builder().token(TELEGRAM_BOT_TOKEN).request(request).build()
 
     # Đăng ký các command
     app.add_handler(CommandHandler("start", start_command))
