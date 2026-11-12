@@ -1,6 +1,6 @@
 import React from "react";
 import type { PhotoItem, DateGroup } from "../types";
-import { Layers, Image as ImageIcon } from "lucide-react";
+import { Layers } from "lucide-react";
 
 interface PhotoGridProps {
   groups: DateGroup[];
@@ -13,52 +13,48 @@ export const PhotoGrid: React.FC<PhotoGridProps> = ({
 }) => {
   if (groups.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center py-24 px-6 text-center">
-        <div className="w-16 h-16 rounded-3xl apple-glass-lens flex items-center justify-center text-neutral-400 mb-4 shadow-xl">
-          <ImageIcon className="w-8 h-8 stroke-[1.5]" />
-        </div>
-        <p className="text-base font-semibold text-neutral-300">Chưa có ảnh nào trong kho</p>
-        <p className="text-xs text-neutral-500 mt-1.5 max-w-xs">
-          Bấm nút + bên dưới hoặc sao chép link Instagram để tải về ngay!
+      <div className="flex flex-col items-center justify-center py-20 text-neutral-500">
+        <p className="text-sm">Chưa có ảnh nào trong kho.</p>
+        <p className="text-xs text-neutral-600 mt-1">
+          Hãy dán link Instagram vào Telegram để tải ảnh!
         </p>
       </div>
     );
   }
 
   return (
-    <div className="pb-36 pt-2">
+    <div className="pb-24">
       {groups.map((group, gIdx) => (
-        <section key={gIdx} className="mb-5">
-          {/* Section Header: Floating Apple Liquid Glass Ribbon */}
-          <div className="sticky top-2 z-20 mx-3 mb-2.5 px-4 py-2 apple-glass-lens rounded-2xl flex items-center justify-between shadow-lg">
-            <h2 className="text-sm font-bold text-white tracking-tight flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
+        <section key={gIdx} className="mb-6">
+          {/* Section Header (Ngày tháng) */}
+          <div className="sticky top-[96px] z-20 px-4 py-2 bg-black/85 backdrop-blur-md flex items-center justify-between">
+            <h2 className="text-base font-bold text-white tracking-tight">
               {group.dateTitle}
             </h2>
-            <span className="text-xs text-white/90 font-semibold px-2.5 py-0.5 rounded-full bg-white/15 border border-white/20">
+            <span className="text-xs text-neutral-400 font-medium">
               {group.photos.length} ảnh
             </span>
           </div>
 
-          {/* 3-Column Grid with Squircle Rounded Corners */}
-          <div className="grid grid-cols-3 gap-2 px-3">
+          {/* 3-Column Grid */}
+          <div className="grid grid-cols-3 gap-0.5 px-0.5">
             {group.photos.map((photo) => (
               <div
                 key={photo.id}
                 onClick={() => onSelectPhoto(photo)}
-                className="relative aspect-square overflow-hidden rounded-2xl bg-neutral-900 border border-white/10 active:scale-[0.96] transition-all duration-200 cursor-pointer group shadow-sm"
+                className="relative aspect-square overflow-hidden bg-neutral-900 active:opacity-75 transition-opacity cursor-pointer group"
               >
                 <img
                   src={photo.thumbnailUrl || photo.url}
                   alt={photo.caption || "Instagram photo"}
-                  className="w-full h-full object-cover select-none pointer-events-none group-active:brightness-90 transition-all duration-200"
+                  className="w-full h-full object-cover select-none pointer-events-none transform group-active:scale-98 transition-transform"
                   loading="lazy"
                 />
 
-                {/* Badge Carousel (Bài viết nhiều ảnh) */}
+                {/* Badge Carousel (Nhiều ảnh) */}
                 {photo.isCarousel && (
-                  <div className="absolute top-2 right-2 px-1.5 py-1 rounded-xl bg-black/65 backdrop-blur-md border border-white/20 text-white shadow-md flex items-center justify-center">
-                    <Layers className="w-3.5 h-3.5 text-white/95" />
+                  <div className="absolute top-1.5 right-1.5 p-1 rounded-md bg-black/60 backdrop-blur-sm text-white">
+                    <Layers className="w-3.5 h-3.5" />
                   </div>
                 )}
               </div>

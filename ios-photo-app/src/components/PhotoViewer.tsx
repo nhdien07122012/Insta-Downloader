@@ -278,37 +278,37 @@ export const PhotoViewer: React.FC<PhotoViewerProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-[#070709] flex flex-col justify-between select-none">
+    <div className="fixed inset-0 z-50 bg-black flex flex-col justify-between select-none">
       {/* Toast Notification */}
       {toast && (
-        <div className="fixed top-24 inset-x-0 mx-auto w-fit z-50 px-4 py-2.5 liquid-glass-pill text-white text-xs font-semibold rounded-full shadow-2xl animate-in fade-in duration-200">
+        <div className="fixed top-24 inset-x-0 mx-auto w-fit z-50 px-4 py-2 bg-neutral-800/95 border border-neutral-700/80 backdrop-blur-xl text-white text-xs font-medium rounded-full shadow-2xl animate-in fade-in duration-200">
           {toast}
         </div>
       )}
 
-      {/* Top Floating Liquid Glass Capsule Bar */}
+      {/* Top Header Bar */}
       <div
-        className={`fixed top-[calc(var(--sat)+10px)] inset-x-4 z-30 liquid-glass-pill rounded-full px-4 py-2 flex items-center justify-between shadow-2xl transition-opacity duration-300 ${
-          uiVisible ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"
+        className={`pt-[var(--sat)] h-20 px-4 flex items-center justify-between bg-black/60 backdrop-blur-md z-20 transition-opacity duration-300 ${
+          uiVisible ? "opacity-100" : "opacity-0 pointer-events-none"
         }`}
       >
         <button
           onClick={onClose}
-          className="flex items-center text-blue-400 active:opacity-70 text-sm font-bold -ml-1 py-1.5 px-3 rounded-full hover:bg-white/10 transition-colors"
+          className="flex items-center text-blue-400 active:opacity-60 text-base font-medium -ml-1 py-2 pr-3"
         >
-          <ChevronLeft className="w-5 h-5 mr-0.5" />
+          <ChevronLeft className="w-6 h-6 mr-0.5" />
           <span>Thư viện</span>
         </button>
 
         <div className="text-center">
-          <p className="text-xs font-bold text-white">
+          <p className="text-sm font-semibold text-white">
             {photo.date.toLocaleDateString("vi-VN", {
               day: "numeric",
               month: "short",
               year: "numeric",
             })}
           </p>
-          <p className="text-[10px] text-neutral-400">
+          <p className="text-xs text-neutral-400">
             {photo.date.toLocaleTimeString("vi-VN", {
               hour: "2-digit",
               minute: "2-digit",
@@ -318,10 +318,10 @@ export const PhotoViewer: React.FC<PhotoViewerProps> = ({
 
         <button
           onClick={handleShare}
-          className="w-10 h-10 flex items-center justify-center rounded-full bg-white/10 border border-white/20 text-white active:scale-95 shadow-md transition-all"
+          className="w-9 h-9 flex items-center justify-center rounded-full bg-neutral-800 text-blue-400 active:opacity-60"
           title="Chia sẻ ảnh"
         >
-          <Share2 className="w-4 h-4 text-white" />
+          <Share2 className="w-5 h-5" />
         </button>
       </div>
 
@@ -348,15 +348,15 @@ export const PhotoViewer: React.FC<PhotoViewerProps> = ({
         />
 
         {loadingHd && (
-          <div className="absolute top-24 right-4 liquid-glass-pill px-3 py-1.5 rounded-full flex items-center gap-2 text-xs text-neutral-200 pointer-events-none shadow-lg">
+          <div className="absolute top-24 right-4 bg-black/60 border border-neutral-700/60 backdrop-blur-md px-3 py-1.5 rounded-full flex items-center gap-2 text-xs text-neutral-300 pointer-events-none">
             <RefreshCw className="w-3.5 h-3.5 animate-spin text-blue-400" />
             <span>Đang tải HD...</span>
           </div>
         )}
 
         {hdUrl && (
-          <div className="absolute top-24 right-4 liquid-glass-pill border border-emerald-400/40 px-3 py-1.5 rounded-full flex items-center gap-1.5 text-xs text-emerald-300 pointer-events-none shadow-lg font-semibold">
-            <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
+          <div className="absolute top-24 right-4 bg-emerald-950/70 border border-emerald-500/40 backdrop-blur-md px-2.5 py-1 rounded-full flex items-center gap-1.5 text-[11px] text-emerald-300 pointer-events-none">
+            <Sparkles className="w-3 h-3 text-emerald-400" />
             <span>HD Cực nét</span>
           </div>
         )}
@@ -365,7 +365,7 @@ export const PhotoViewer: React.FC<PhotoViewerProps> = ({
         {hasPrev && scale === 1 && (
           <button
             onClick={handlePrev}
-            className="absolute left-4 p-3 rounded-full liquid-glass-pill text-white active:scale-95 z-10 transition-transform hidden sm:flex"
+            className="absolute left-3 p-3 rounded-full bg-black/40 text-white hover:bg-black/70 backdrop-blur-sm z-10 transition-colors hidden sm:flex"
           >
             <ChevronLeft className="w-6 h-6" />
           </button>
@@ -373,17 +373,17 @@ export const PhotoViewer: React.FC<PhotoViewerProps> = ({
         {hasNext && scale === 1 && (
           <button
             onClick={handleNext}
-            className="absolute right-4 p-3 rounded-full liquid-glass-pill text-white active:scale-95 z-10 transition-transform hidden sm:flex"
+            className="absolute right-3 p-3 rounded-full bg-black/40 text-white hover:bg-black/70 backdrop-blur-sm z-10 transition-colors hidden sm:flex"
           >
             <ChevronRight className="w-6 h-6" />
           </button>
         )}
       </div>
 
-      {/* Bottom Floating Liquid Glass Action Bar: Larger touch targets */}
+      {/* Bottom Action Bar (Apple Photos style) */}
       <div
-        className={`fixed bottom-[calc(max(var(--sab),12px)+8px)] inset-x-8 z-30 liquid-glass-pill rounded-full px-6 py-2 flex items-center justify-around shadow-2xl transition-opacity duration-300 ${
-          uiVisible ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"
+        className={`pb-[var(--sab)] h-20 px-8 flex items-center justify-between bg-black/60 backdrop-blur-md z-20 transition-opacity duration-300 ${
+          uiVisible ? "opacity-100" : "opacity-0 pointer-events-none"
         }`}
       >
         {/* Nút Trái tim (Yêu thích) */}
@@ -393,8 +393,8 @@ export const PhotoViewer: React.FC<PhotoViewerProps> = ({
             onToggleFavorite(String(photo.id));
             showToast(isFavorite ? "Đã xóa khỏi Mục yêu thích" : "Đã thêm vào Mục yêu thích ❤️");
           }}
-          className={`w-12 h-12 flex items-center justify-center rounded-full transition-transform active:scale-125 ${
-            isFavorite ? "text-red-500" : "text-neutral-300 hover:text-white"
+          className={`p-2 transition-transform active:scale-125 ${
+            isFavorite ? "text-red-500" : "text-neutral-300"
           }`}
           title="Yêu thích ảnh"
         >
@@ -407,7 +407,7 @@ export const PhotoViewer: React.FC<PhotoViewerProps> = ({
             e.stopPropagation();
             setShowInfo(true);
           }}
-          className="w-12 h-12 flex items-center justify-center rounded-full text-neutral-300 hover:text-white active:scale-95 transition-transform"
+          className="p-2 text-neutral-300 active:opacity-60"
         >
           <Info className="w-6 h-6" />
         </button>
@@ -415,24 +415,24 @@ export const PhotoViewer: React.FC<PhotoViewerProps> = ({
         {/* Nút Tải về máy */}
         <button
           onClick={handleDownload}
-          className="w-12 h-12 flex items-center justify-center rounded-full text-neutral-300 hover:text-white active:scale-95 transition-transform"
+          className="p-2 text-neutral-300 active:opacity-60"
           title="Tải ảnh về máy"
         >
           <Download className="w-6 h-6" />
         </button>
       </div>
 
-      {/* Info Bottom Sheet: Liquid Glass Sheet */}
+      {/* Info Bottom Sheet */}
       {showInfo && (
         <div
           onClick={(e) => e.stopPropagation()}
-          className="absolute inset-x-0 bottom-0 z-40 liquid-glass-sheet rounded-t-[36px] p-6 text-white max-h-[75vh] overflow-y-auto animate-in slide-in-from-bottom duration-300 shadow-2xl"
+          className="absolute inset-x-0 bottom-0 z-40 bg-neutral-900/95 backdrop-blur-2xl rounded-t-3xl p-6 border-t border-neutral-800 text-white max-h-[75vh] overflow-y-auto animate-in slide-in-from-bottom duration-300"
         >
-          <div className="flex items-center justify-between pb-4 border-b border-white/10">
+          <div className="flex items-center justify-between pb-4 border-b border-neutral-800">
             <h3 className="text-lg font-bold">Chi tiết ảnh Instagram</h3>
             <button
               onClick={() => setShowInfo(false)}
-              className="w-9 h-9 rounded-full bg-white/10 border border-white/20 flex items-center justify-center text-white active:scale-95"
+              className="w-8 h-8 rounded-full bg-neutral-800 flex items-center justify-center text-neutral-400 active:text-white"
             >
               <X className="w-4 h-4" />
             </button>
@@ -442,23 +442,23 @@ export const PhotoViewer: React.FC<PhotoViewerProps> = ({
             {photo.author && (
               <div>
                 <p className="text-neutral-400 text-xs">Tác giả Instagram</p>
-                <p className="font-bold text-blue-400 text-base">@{photo.author}</p>
+                <p className="font-semibold text-blue-400">@{photo.author}</p>
               </div>
             )}
 
             {photo.caption && (
               <div>
-                <p className="text-neutral-400 text-xs mb-1.5">Nội dung bài viết (Caption)</p>
-                <p className="text-neutral-200 text-xs leading-relaxed liquid-glass-card p-3.5 rounded-2xl border border-white/10 font-normal">
+                <p className="text-neutral-400 text-xs mb-1">Nội dung bài viết (Caption)</p>
+                <p className="text-neutral-200 text-xs leading-relaxed bg-neutral-800/60 p-3 rounded-xl border border-neutral-800 font-normal">
                   {photo.caption}
                 </p>
               </div>
             )}
 
             <div className="grid grid-cols-2 gap-3 pt-1">
-              <div className="liquid-glass-card p-3.5 rounded-2xl border border-white/10">
+              <div className="bg-neutral-800/40 p-3 rounded-xl border border-neutral-800">
                 <p className="text-neutral-400 text-xs">Ngày lưu trữ</p>
-                <p className="text-xs font-semibold text-white mt-1">
+                <p className="text-xs font-medium text-white mt-0.5">
                   {photo.date.toLocaleDateString("vi-VN", {
                     day: "numeric",
                     month: "long",
@@ -467,9 +467,9 @@ export const PhotoViewer: React.FC<PhotoViewerProps> = ({
                 </p>
               </div>
 
-              <div className="liquid-glass-card p-3.5 rounded-2xl border border-white/10">
+              <div className="bg-neutral-800/40 p-3 rounded-xl border border-neutral-800">
                 <p className="text-neutral-400 text-xs">Mã tin nhắn Kênh</p>
-                <p className="text-xs font-mono text-neutral-300 mt-1">
+                <p className="text-xs font-mono text-neutral-300 mt-0.5">
                   #{photo.messageId}
                 </p>
               </div>
@@ -481,10 +481,10 @@ export const PhotoViewer: React.FC<PhotoViewerProps> = ({
                   href={photo.originalUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="w-full py-3.5 bg-gradient-to-r from-pink-600 via-purple-600 to-indigo-600 rounded-2xl font-bold text-white text-xs flex items-center justify-center gap-2 active:scale-98 shadow-xl shadow-purple-600/30 transition-transform"
+                  className="w-full py-3 bg-gradient-to-r from-pink-600 to-purple-600 rounded-xl font-medium text-white text-xs flex items-center justify-center gap-1.5 active:opacity-80 shadow-md"
                 >
                   <span>Mở bài viết gốc trên Instagram</span>
-                  <ExternalLink className="w-4 h-4" />
+                  <ExternalLink className="w-3.5 h-3.5" />
                 </a>
               </div>
             )}

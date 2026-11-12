@@ -98,24 +98,22 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       };
       setFormData(updatedConfig);
       onSave(updatedConfig);
-      setStatusMsg("🎉 Đăng nhập Telegram MTProto thành công!");
-      setTimeout(() => {
-        onClose();
-      }, 1200);
+      setStatusMsg("Đăng nhập Telegram MTProto thành công!");
+      setStep("phone");
     } catch (err: any) {
-      if (err.message && err.message.includes("2FA")) {
+      if (err.errorMessage === "SESSION_PASSWORD_NEEDED") {
         setStep("password");
-        setStatusMsg("Tài khoản có bật bảo mật 2 lớp. Hãy nhập mật khẩu đám mây (2FA) của bạn.");
+        setStatusMsg("Tài khoản yêu cầu mật khẩu xác thực 2 lớp (2FA)");
       } else {
-        setStatusMsg(err.message || "Mã xác thực không chính xác");
+        setStatusMsg(err.message || "Mã xác thực không hợp lệ");
       }
     } finally {
       setLoading(false);
     }
   };
 
-  const handleLogout = () => {
-    logoutTelegram();
+  const handleLogout = async () => {
+    await logoutTelegram();
     const updatedConfig: TelegramConfig = {
       ...formData,
       sessionString: "",
@@ -123,10 +121,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     };
     setFormData(updatedConfig);
     onSave(updatedConfig);
-    setStep("phone");
-    setCode("");
-    setPassword("");
-    setStatusMsg("Đã đăng xuất tài khoản Telegram.");
+    setStatusMsg("Đã đăng xuất tài khoản.");
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -148,32 +143,30 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-md flex items-center justify-center p-4">
-      <div className="w-full max-w-md liquid-glass-sheet border border-white/20 rounded-[32px] p-6 shadow-2xl text-white max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between pb-4 border-b border-white/10">
-          <h2 className="text-lg font-bold flex items-center gap-2.5">
-            <span className="w-8 h-8 rounded-xl bg-blue-500/20 text-blue-400 flex items-center justify-center border border-blue-500/30">
-              <ShieldCheck className="w-5 h-5" />
-            </span>
+    <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
+      <div className="w-full max-w-md bg-neutral-900 border border-neutral-800 rounded-3xl p-6 shadow-2xl text-white max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between pb-4 border-b border-neutral-800">
+          <h2 className="text-lg font-bold flex items-center gap-2">
+            <ShieldCheck className="w-5 h-5 text-blue-500" />
             Cấu hình Telegram MTProto
           </h2>
           <button
             onClick={onClose}
-            className="w-9 h-9 rounded-full bg-white/10 border border-white/15 flex items-center justify-center text-white active:scale-95 transition-all"
+            className="w-8 h-8 rounded-full bg-neutral-800 flex items-center justify-center text-neutral-400 active:text-white"
           >
             <X className="w-4 h-4" />
           </button>
         </div>
 
         {/* Switch tab */}
-        <div className="flex liquid-glass-card p-1.5 rounded-2xl mt-4 border border-white/10">
+        <div className="flex bg-neutral-800/80 p-1 rounded-xl mt-4">
           <button
             type="button"
             onClick={() => setActiveTab("api")}
-            className={`flex-1 py-2 text-xs font-bold rounded-xl transition-all ${
+            className={`flex-1 py-1.5 text-xs font-semibold rounded-lg transition-all ${
               activeTab === "api"
-                ? "liquid-glass-active text-white shadow-md"
-                : "text-neutral-400 hover:text-white"
+                ? "bg-neutral-700 text-white shadow-sm"
+                : "text-neutral-400"
             }`}
           >
             Thông số API
@@ -181,10 +174,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           <button
             type="button"
             onClick={() => setActiveTab("login")}
-            className={`flex-1 py-2 text-xs font-bold rounded-xl transition-all ${
+            className={`flex-1 py-1.5 text-xs font-semibold rounded-lg transition-all ${
               activeTab === "login"
-                ? "liquid-glass-active text-white shadow-md"
-                : "text-neutral-400 hover:text-white"
+                ? "bg-neutral-700 text-white shadow-sm"
+                : "text-neutral-400"
             }`}
           >
             Đăng nhập MTProto
@@ -192,43 +185,43 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         </div>
 
         {statusMsg && (
-          <div className="mt-3.5 p-3.5 liquid-glass-card border border-amber-500/30 rounded-2xl text-xs text-amber-300 font-medium leading-relaxed">
+          <div className="mt-3 p-2.5 bg-neutral-800 border border-neutral-700 rounded-xl text-xs text-amber-300">
             {statusMsg}
           </div>
         )}
 
         {activeTab === "api" && (
           <form onSubmit={handleSubmit} className="mt-4 space-y-4">
-            <p className="text-xs text-neutral-300 leading-relaxed">
+            <p className="text-xs text-neutral-400 leading-relaxed">
               Lấy <b>API ID</b> & <b>API Hash</b> miễn phí tại:{" "}
               <a
                 href="https://my.telegram.org/"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-blue-400 underline font-semibold inline-flex items-center gap-1"
+                className="text-blue-400 underline inline-flex items-center gap-0.5"
               >
-                my.telegram.org <ExternalLink className="w-3.5 h-3.5" />
+                my.telegram.org <ExternalLink className="w-3 h-3" />
               </a>
             </p>
 
             <div>
-              <label className="text-xs text-neutral-300 font-semibold flex items-center gap-1.5 mb-2">
+              <label className="text-xs text-neutral-400 font-medium flex items-center gap-1.5 mb-1.5">
                 <Key className="w-3.5 h-3.5 text-blue-400" />
                 API ID:
               </label>
               <input
                 type="text"
-                placeholder="Ví dụ: 37132709"
+                placeholder="Ví dụ: 28471923"
                 value={formData.apiId}
                 onChange={(e) =>
                   setFormData({ ...formData, apiId: e.target.value.trim() })
                 }
-                className="w-full liquid-glass-card border border-white/15 rounded-2xl px-4 py-3 text-sm text-white focus:outline-none focus:border-blue-400 transition-colors shadow-inner"
+                className="w-full bg-neutral-800 border border-neutral-700 rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-blue-500"
               />
             </div>
 
             <div>
-              <label className="text-xs text-neutral-300 font-semibold flex items-center gap-1.5 mb-2">
+              <label className="text-xs text-neutral-400 font-medium flex items-center gap-1.5 mb-1.5">
                 <ShieldCheck className="w-3.5 h-3.5 text-blue-400" />
                 API HASH:
               </label>
@@ -239,12 +232,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 onChange={(e) =>
                   setFormData({ ...formData, apiHash: e.target.value.trim() })
                 }
-                className="w-full liquid-glass-card border border-white/15 rounded-2xl px-4 py-3 text-sm text-white focus:outline-none focus:border-blue-400 transition-colors font-mono shadow-inner"
+                className="w-full bg-neutral-800 border border-neutral-700 rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-blue-500 font-mono"
               />
             </div>
 
             <div>
-              <label className="text-xs text-neutral-300 font-semibold flex items-center gap-1.5 mb-2">
+              <label className="text-xs text-neutral-400 font-medium flex items-center gap-1.5 mb-1.5">
                 <Bot className="w-3.5 h-3.5 text-blue-400" />
                 Bot Token (Đã điền sẵn):
               </label>
@@ -254,12 +247,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 onChange={(e) =>
                   setFormData({ ...formData, botToken: e.target.value.trim() })
                 }
-                className="w-full liquid-glass-card border border-white/10 rounded-2xl px-4 py-3 text-xs text-neutral-300 font-mono shadow-inner"
+                className="w-full bg-neutral-800/60 border border-neutral-700/60 rounded-xl px-3.5 py-2.5 text-xs text-neutral-300 font-mono"
               />
             </div>
 
             <div>
-              <label className="text-xs text-neutral-300 font-semibold flex items-center gap-1.5 mb-2">
+              <label className="text-xs text-neutral-400 font-medium flex items-center gap-1.5 mb-1.5">
                 <Hash className="w-3.5 h-3.5 text-blue-400" />
                 ID Kênh lưu trữ:
               </label>
@@ -269,7 +262,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 onChange={(e) =>
                   setFormData({ ...formData, channelId: e.target.value.trim() })
                 }
-                className="w-full liquid-glass-card border border-white/10 rounded-2xl px-4 py-3 text-xs text-neutral-300 font-mono shadow-inner"
+                className="w-full bg-neutral-800/60 border border-neutral-700/60 rounded-xl px-3.5 py-2.5 text-xs text-neutral-300 font-mono"
               />
             </div>
 
@@ -277,13 +270,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               <button
                 type="button"
                 onClick={onClose}
-                className="flex-1 py-3.5 bg-white/10 border border-white/15 text-neutral-200 font-bold rounded-2xl text-sm active:scale-95 transition-all"
+                className="flex-1 py-3 bg-neutral-800 text-neutral-300 font-medium rounded-xl text-sm"
               >
                 Hủy
               </button>
               <button
                 type="submit"
-                className="flex-1 py-3.5 bg-blue-600 border border-blue-400/40 text-white font-bold rounded-2xl text-sm flex items-center justify-center gap-2 active:scale-95 shadow-xl shadow-blue-600/30 transition-all"
+                className="flex-1 py-3 bg-blue-600 text-white font-semibold rounded-xl text-sm flex items-center justify-center gap-1.5"
               >
                 {savedSuccess ? (
                   <>
@@ -301,34 +294,34 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         {activeTab === "login" && (
           <div className="mt-4 space-y-4">
             {formData.isLoggedIn ? (
-              <div className="p-5 liquid-glass-card border border-emerald-500/40 rounded-3xl text-center">
-                <div className="w-12 h-12 rounded-2xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 flex items-center justify-center mx-auto mb-3 shadow-inner">
-                  <Check className="w-6 h-6" />
+              <div className="p-4 bg-emerald-950/40 border border-emerald-800/60 rounded-2xl text-center">
+                <div className="w-10 h-10 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center mx-auto mb-2">
+                  <Check className="w-5 h-5" />
                 </div>
-                <h3 className="font-bold text-emerald-300 text-base">
+                <h3 className="font-semibold text-emerald-400 text-sm">
                   Đã kết nối Telegram cá nhân
                 </h3>
-                <p className="text-xs text-neutral-300 mt-1">
+                <p className="text-xs text-neutral-400 mt-1">
                   Đang dùng tài khoản của bạn để đọc ảnh từ kênh lưu trữ.
                 </p>
                 <button
                   type="button"
                   onClick={handleLogout}
-                  className="mt-5 px-5 py-2.5 bg-red-950/80 text-red-300 border border-red-800/60 rounded-2xl text-xs font-bold flex items-center gap-2 mx-auto active:scale-95 transition-all shadow-md"
+                  className="mt-4 px-4 py-2 bg-red-950 text-red-400 border border-red-800/60 rounded-xl text-xs font-semibold flex items-center gap-1.5 mx-auto active:bg-red-900"
                 >
-                  <LogOut className="w-4 h-4" />
+                  <LogOut className="w-3.5 h-3.5" />
                   Đăng xuất tài khoản
                 </button>
               </div>
             ) : (
-              <div className="space-y-4">
-                <p className="text-xs text-neutral-300 leading-relaxed">
+              <div className="space-y-3">
+                <p className="text-xs text-neutral-400 leading-relaxed">
                   Đăng nhập tài khoản cá nhân để ứng dụng có toàn quyền đọc tin nhắn ảnh trong kênh lưu trữ tương tự ứng dụng <b>Telegram-Drive</b>.
                 </p>
 
                 {step === "phone" && (
                   <div>
-                    <label className="text-xs text-neutral-300 font-semibold flex items-center gap-1.5 mb-2">
+                    <label className="text-xs text-neutral-400 font-medium flex items-center gap-1.5 mb-1.5">
                       <Phone className="w-3.5 h-3.5 text-blue-400" />
                       Số điện thoại Telegram:
                     </label>
@@ -337,13 +330,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       placeholder="+84xxxxxxxxx"
                       value={phone}
                       onChange={(e) => setPhone(e.target.value)}
-                      className="w-full liquid-glass-card border border-white/15 rounded-2xl px-4 py-3 text-sm text-white focus:outline-none focus:border-blue-400 transition-colors shadow-inner"
+                      className="w-full bg-neutral-800 border border-neutral-700 rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-blue-500"
                     />
                     <button
                       type="button"
                       disabled={loading}
                       onClick={handleSendCode}
-                      className="w-full mt-4 py-3.5 bg-blue-600 border border-blue-400/40 text-white font-bold rounded-2xl text-sm flex items-center justify-center gap-2 active:scale-98 shadow-xl shadow-blue-600/30 disabled:opacity-50 transition-all"
+                      className="w-full mt-3 py-2.5 bg-blue-600 text-white font-semibold rounded-xl text-sm flex items-center justify-center gap-1.5 active:bg-blue-700 disabled:opacity-50"
                     >
                       {loading ? (
                         <RefreshCw className="w-4 h-4 animate-spin" />
@@ -356,7 +349,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
                 {step === "code" && (
                   <div>
-                    <label className="text-xs text-neutral-300 font-semibold flex items-center gap-1.5 mb-2">
+                    <label className="text-xs text-neutral-400 font-medium flex items-center gap-1.5 mb-1.5">
                       <Lock className="w-3.5 h-3.5 text-blue-400" />
                       Nhập mã xác thực:
                     </label>
@@ -365,13 +358,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       placeholder="12345"
                       value={code}
                       onChange={(e) => setCode(e.target.value)}
-                      className="w-full liquid-glass-card border border-white/15 rounded-2xl px-4 py-3 text-lg text-white focus:outline-none focus:border-blue-400 font-mono tracking-widest text-center shadow-inner"
+                      className="w-full bg-neutral-800 border border-neutral-700 rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-blue-500 font-mono tracking-widest text-center"
                     />
                     <button
                       type="button"
                       disabled={loading}
                       onClick={handleVerifyCode}
-                      className="w-full mt-4 py-3.5 bg-emerald-600 border border-emerald-400/40 text-white font-bold rounded-2xl text-sm flex items-center justify-center gap-2 active:scale-98 shadow-xl shadow-emerald-600/30 disabled:opacity-50 transition-all"
+                      className="w-full mt-3 py-2.5 bg-emerald-600 text-white font-semibold rounded-xl text-sm flex items-center justify-center gap-1.5 active:bg-emerald-700 disabled:opacity-50"
                     >
                       {loading ? (
                         <RefreshCw className="w-4 h-4 animate-spin" />
@@ -384,7 +377,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
                 {step === "password" && (
                   <div>
-                    <label className="text-xs text-neutral-300 font-semibold flex items-center gap-1.5 mb-2">
+                    <label className="text-xs text-neutral-400 font-medium flex items-center gap-1.5 mb-1.5">
                       <Lock className="w-3.5 h-3.5 text-purple-400" />
                       Mật khẩu xác thực 2 lớp (2FA):
                     </label>
@@ -393,13 +386,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       placeholder="Nhập mật khẩu 2FA..."
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
-                      className="w-full liquid-glass-card border border-white/15 rounded-2xl px-4 py-3 text-sm text-white focus:outline-none focus:border-purple-400 transition-colors shadow-inner"
+                      className="w-full bg-neutral-800 border border-neutral-700 rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-purple-500"
                     />
                     <button
                       type="button"
                       disabled={loading}
                       onClick={handleVerifyCode}
-                      className="w-full mt-4 py-3.5 bg-purple-600 border border-purple-400/40 text-white font-bold rounded-2xl text-sm flex items-center justify-center gap-2 active:scale-98 shadow-xl shadow-purple-600/30 disabled:opacity-50 transition-all"
+                      className="w-full mt-3 py-2.5 bg-purple-600 text-white font-semibold rounded-xl text-sm flex items-center justify-center gap-1.5 active:bg-purple-700 disabled:opacity-50"
                     >
                       {loading ? (
                         <RefreshCw className="w-4 h-4 animate-spin" />
