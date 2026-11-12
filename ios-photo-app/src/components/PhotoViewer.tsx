@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import type { PhotoItem, TelegramConfig } from "../types";
 import {
   ChevronLeft,
@@ -12,12 +12,15 @@ import {
   RefreshCw,
   Sparkles,
 } from "lucide-react";
+import { Share } from "@capacitor/share";
 import { fetchFullResolutionPhoto } from "../services/telegramClient";
 
 interface PhotoViewerProps {
   photo: PhotoItem | null;
   allPhotos: PhotoItem[];
   config: TelegramConfig;
+  isFavorite: boolean;
+  onToggleFavorite: (id: string) => void;
   onClose: () => void;
   onSelectPhoto: (p: PhotoItem) => void;
 }
@@ -26,16 +29,43 @@ export const PhotoViewer: React.FC<PhotoViewerProps> = ({
   photo,
   allPhotos,
   config,
+  isFavorite,
+  onToggleFavorite,
   onClose,
   onSelectPhoto,
 }) => {
   const [showInfo, setShowInfo] = useState(false);
-  const [isLiked, setIsLiked] = useState(false);
   const [uiVisible, setUiVisible] = useState(true);
   const [hdUrl, setHdUrl] = useState<string | null>(null);
   const [loadingHd, setLoadingHd] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
 
+  // Zoom & Pan state
+  const [scale, setScale] = useState(1);
+  const [position, setPosition] = useState({ x: 0, y: 0 });
+  const [isGesturing, setIsGesturing] = useState(false);
+
+  const containerRef = useRef<HTMLDivElement>(null);
+  const touchStartRef = useRef<{ dist: number; scale: number; x: number; y: number; touches: number }>({
+    dist: 0,
+    scale: 1,
+    x: 0,
+    y: 0,
+    touches: 0,
+  });
+  const lastTapRef = useRef<number>(0);
+
+  const showToast = (msg: string) => {
+    setToast(msg);
+    setTimeout(() => {
+      setToast(null);
+    }, 2800);
+  };
+
+  // Reset zoom & pan when switching photo
   useEffect(() => {
+    setScale(1);
+    setPosition({ x: 0, y: 0 });
     let active = true;
     setHdUrl(null);
     if (!photo) return;
@@ -80,9 +110,115 @@ export const PhotoViewer: React.FC<PhotoViewerProps> = ({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [currentIndex, hasPrev, hasNext]);
 
-  // Tải ảnh về máy iPhone
+  // Touch Handlers for Pinch to Zoom & Pan
+  const handleTouchStart = (e: React.TouchEvent) => {
+    if (e.touches.length === 2) {
+      // 2 fingers: Pinch to zoom
+      setIsGesturing(true);
+      const dist = Math.hypot(
+        e.touches[0].clientX - e.touches[1].clientX,
+        e.touches[0].clientY - e.touches[1].clientY
+      );
+      touchStartRef.current = {
+        dist,
+        scale,
+        x: position.x,
+        y: position.y,
+        touches: 2,
+      };
+    } else if (e.touches.length === 1) {
+      // 1 finger: Check for double tap or pan
+      const now = Date.now();
+      if (now - lastTapRef.current < 300) {
+        // Double tap: toggle zoom 1x <-> 2.5x
+        if (scale > 1.1) {
+          setScale(1);
+          setPosition({ x: 0, y: 0 });
+        } else {
+          setScale(2.5);
+          setPosition({ x: 0, y: 0 });
+        }
+        lastTapRef.current = 0;
+        return;
+      }
+      lastTapRef.current = now;
+
+      if (scale > 1) {
+        setIsGesturing(true);
+        touchStartRef.current = {
+          dist: 0,
+          scale,
+          x: e.touches[0].clientX - position.x,
+          y: e.touches[0].clientY - position.y,
+          touches: 1,
+        };
+      }
+    }
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (e.touches.length === 2 && touchStartRef.current.touches === 2) {
+      e.preventDefault();
+      const dist = Math.hypot(
+        e.touches[0].clientX - e.touches[1].clientX,
+        e.touches[0].clientY - e.touches[1].clientY
+      );
+      if (touchStartRef.current.dist > 0) {
+        const factor = dist / touchStartRef.current.dist;
+        const newScale = Math.min(Math.max(touchStartRef.current.scale * factor, 0.9), 4.5);
+        setScale(newScale);
+      }
+    } else if (e.touches.length === 1 && scale > 1) {
+      e.preventDefault();
+      const newX = e.touches[0].clientX - touchStartRef.current.x;
+      const newY = e.touches[0].clientY - touchStartRef.current.y;
+      const maxOffset = 250 * (scale - 1);
+      setPosition({
+        x: Math.min(Math.max(newX, -maxOffset), maxOffset),
+        y: Math.min(Math.max(newY, -maxOffset * 1.5), maxOffset * 1.5),
+      });
+    }
+  };
+
+  const handleTouchEnd = () => {
+    setIsGesturing(false);
+    if (scale < 1.05) {
+      setScale(1);
+      setPosition({ x: 0, y: 0 });
+    }
+  };
+
+  // Tải ảnh về máy iPhone (Hỗ trợ iOS Camera Roll)
   const handleDownload = async (e: React.MouseEvent) => {
     e.stopPropagation();
+    showToast("Đang chuẩn bị ảnh chất lượng cao...");
+
+    try {
+      const targetUrl = hdUrl || photo.url;
+      const res = await fetch(targetUrl);
+      const blob = await res.blob();
+      const file = new File(
+        [blob],
+        `instagram_${photo.author || "photo"}_${Date.now()}.jpg`,
+        { type: "image/jpeg" }
+      );
+
+      // Cách 1: Native Web Share File (Mở menu iOS chứa nút 'Lưu hình ảnh' vào Thư viện)
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({
+          files: [file],
+          title: "Lưu vào Thư viện ảnh",
+        });
+        showToast("👉 Chọn 'Lưu hình ảnh' để lưu vào Thư viện iPhone");
+        return;
+      }
+    } catch (err: any) {
+      if (err.name !== "AbortError") {
+        console.warn("Share download error:", err);
+      }
+    }
+
+    // Cách 2: Browser download fallback (trình duyệt máy tính hoặc Android)
     try {
       const a = document.createElement("a");
       a.href = hdUrl || photo.url;
@@ -90,29 +226,66 @@ export const PhotoViewer: React.FC<PhotoViewerProps> = ({
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
-    } catch (err) {
-      console.error("Lỗi khi tải ảnh:", err);
+      showToast("Đã tải ảnh về máy");
+    } catch {
+      showToast("Mẹo: Nhấn giữ vào ảnh và chọn 'Lưu vào Ảnh'");
     }
   };
 
   // Chia sẻ ảnh (Native iOS Share Sheet)
   const handleShare = async (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (navigator.share) {
-      try {
+
+    // 1. Chia sẻ File ảnh qua Web Share API
+    try {
+      const targetUrl = hdUrl || photo.url;
+      const res = await fetch(targetUrl);
+      const blob = await res.blob();
+      const file = new File(
+        [blob],
+        `instagram_${photo.author || "photo"}.jpg`,
+        { type: "image/jpeg" }
+      );
+
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
         await navigator.share({
+          files: [file],
           title: `Ảnh từ @${photo.author || "Instagram"}`,
           text: photo.caption,
-          url: photo.originalUrl || hdUrl || photo.url,
         });
-      } catch (err) {
-        // user cancelled
+        return;
       }
+    } catch {}
+
+    // 2. Chia sẻ link qua Capacitor Native Share
+    try {
+      await Share.share({
+        title: `Ảnh từ @${photo.author || "Instagram"}`,
+        text: photo.caption || "Ảnh từ Instagram",
+        url: photo.originalUrl || undefined,
+        dialogTitle: "Chia sẻ ảnh",
+      });
+      return;
+    } catch {}
+
+    // 3. Sao chép link nếu không mở được share
+    if (photo.originalUrl) {
+      try {
+        await navigator.clipboard.writeText(photo.originalUrl);
+        showToast("Đã sao chép liên kết Instagram!");
+      } catch {}
     }
   };
 
   return (
     <div className="fixed inset-0 z-50 bg-black flex flex-col justify-between select-none">
+      {/* Toast Notification */}
+      {toast && (
+        <div className="fixed top-24 inset-x-0 mx-auto w-fit z-50 px-4 py-2 bg-neutral-800/95 border border-neutral-700/80 backdrop-blur-xl text-white text-xs font-medium rounded-full shadow-2xl animate-in fade-in duration-200">
+          {toast}
+        </div>
+      )}
+
       {/* Top Header Bar */}
       <div
         className={`pt-[var(--sat)] h-20 px-4 flex items-center justify-between bg-black/60 backdrop-blur-md z-20 transition-opacity duration-300 ${
@@ -146,20 +319,32 @@ export const PhotoViewer: React.FC<PhotoViewerProps> = ({
         <button
           onClick={handleShare}
           className="w-9 h-9 flex items-center justify-center rounded-full bg-neutral-800 text-blue-400 active:opacity-60"
+          title="Chia sẻ ảnh"
         >
           <Share2 className="w-5 h-5" />
         </button>
       </div>
 
-      {/* Main Photo Center Container */}
+      {/* Main Photo Center Container with Pinch to Zoom */}
       <div
-        onClick={() => setUiVisible(!uiVisible)}
-        className="relative flex-1 flex items-center justify-center overflow-hidden cursor-pointer"
+        ref={containerRef}
+        onClick={() => {
+          if (scale === 1) setUiVisible(!uiVisible);
+        }}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+        className="relative flex-1 flex items-center justify-center overflow-hidden cursor-pointer touch-none"
       >
         <img
           src={hdUrl || photo.url}
           alt={photo.caption || "Fullscreen view"}
-          className="max-w-full max-h-full object-contain pointer-events-auto"
+          style={{
+            transform: `scale(${scale}) translate(${position.x / scale}px, ${position.y / scale}px)`,
+            transition: isGesturing ? "none" : "transform 0.2s cubic-bezier(0.2, 0, 0, 1)",
+            WebkitTouchCallout: "default",
+          }}
+          className="max-w-full max-h-full object-contain pointer-events-auto select-none"
         />
 
         {loadingHd && (
@@ -177,7 +362,7 @@ export const PhotoViewer: React.FC<PhotoViewerProps> = ({
         )}
 
         {/* Navigation Arrows for Desktop / Tablet */}
-        {hasPrev && (
+        {hasPrev && scale === 1 && (
           <button
             onClick={handlePrev}
             className="absolute left-3 p-3 rounded-full bg-black/40 text-white hover:bg-black/70 backdrop-blur-sm z-10 transition-colors hidden sm:flex"
@@ -185,7 +370,7 @@ export const PhotoViewer: React.FC<PhotoViewerProps> = ({
             <ChevronLeft className="w-6 h-6" />
           </button>
         )}
-        {hasNext && (
+        {hasNext && scale === 1 && (
           <button
             onClick={handleNext}
             className="absolute right-3 p-3 rounded-full bg-black/40 text-white hover:bg-black/70 backdrop-blur-sm z-10 transition-colors hidden sm:flex"
@@ -205,13 +390,15 @@ export const PhotoViewer: React.FC<PhotoViewerProps> = ({
         <button
           onClick={(e) => {
             e.stopPropagation();
-            setIsLiked(!isLiked);
+            onToggleFavorite(String(photo.id));
+            showToast(isFavorite ? "Đã xóa khỏi Mục yêu thích" : "Đã thêm vào Mục yêu thích ❤️");
           }}
           className={`p-2 transition-transform active:scale-125 ${
-            isLiked ? "text-red-500 fill-red-500" : "text-neutral-300"
+            isFavorite ? "text-red-500" : "text-neutral-300"
           }`}
+          title="Yêu thích ảnh"
         >
-          <Heart className={`w-6 h-6 ${isLiked ? "fill-red-500" : ""}`} />
+          <Heart className={`w-6 h-6 ${isFavorite ? "fill-red-500 text-red-500 scale-110" : ""}`} />
         </button>
 
         {/* Nút Thông tin (i) */}
@@ -235,7 +422,7 @@ export const PhotoViewer: React.FC<PhotoViewerProps> = ({
         </button>
       </div>
 
-      {/* Info Bottom Sheet (Bảng chi tiết thông tin ảnh) */}
+      {/* Info Bottom Sheet */}
       {showInfo && (
         <div
           onClick={(e) => e.stopPropagation()}
@@ -261,34 +448,46 @@ export const PhotoViewer: React.FC<PhotoViewerProps> = ({
 
             {photo.caption && (
               <div>
-                <p className="text-neutral-400 text-xs">Mô tả / Caption</p>
-                <p className="text-neutral-200 mt-0.5 leading-relaxed">
+                <p className="text-neutral-400 text-xs mb-1">Nội dung bài viết (Caption)</p>
+                <p className="text-neutral-200 text-xs leading-relaxed bg-neutral-800/60 p-3 rounded-xl border border-neutral-800 font-normal">
                   {photo.caption}
                 </p>
               </div>
             )}
 
+            <div className="grid grid-cols-2 gap-3 pt-1">
+              <div className="bg-neutral-800/40 p-3 rounded-xl border border-neutral-800">
+                <p className="text-neutral-400 text-xs">Ngày lưu trữ</p>
+                <p className="text-xs font-medium text-white mt-0.5">
+                  {photo.date.toLocaleDateString("vi-VN", {
+                    day: "numeric",
+                    month: "long",
+                    year: "numeric",
+                  })}
+                </p>
+              </div>
+
+              <div className="bg-neutral-800/40 p-3 rounded-xl border border-neutral-800">
+                <p className="text-neutral-400 text-xs">Mã tin nhắn Kênh</p>
+                <p className="text-xs font-mono text-neutral-300 mt-0.5">
+                  #{photo.messageId}
+                </p>
+              </div>
+            </div>
+
             {photo.originalUrl && (
-              <div>
-                <p className="text-neutral-400 text-xs">Bài đăng gốc</p>
+              <div className="pt-2">
                 <a
                   href={photo.originalUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1.5 text-blue-400 hover:underline mt-0.5 font-medium"
+                  className="w-full py-3 bg-gradient-to-r from-pink-600 to-purple-600 rounded-xl font-medium text-white text-xs flex items-center justify-center gap-1.5 active:opacity-80 shadow-md"
                 >
-                  <span>Mở trên Instagram</span>
+                  <span>Mở bài viết gốc trên Instagram</span>
                   <ExternalLink className="w-3.5 h-3.5" />
                 </a>
               </div>
             )}
-
-            <div>
-              <p className="text-neutral-400 text-xs">Thời gian lưu</p>
-              <p className="text-neutral-200">
-                {photo.date.toLocaleString("vi-VN")}
-              </p>
-            </div>
           </div>
         </div>
       )}

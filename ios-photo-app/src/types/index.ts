@@ -8,6 +8,7 @@ export interface PhotoItem {
   caption?: string;
   author?: string;
   originalUrl?: string;
+  groupedId?: string;
   date: Date;
   isCarousel?: boolean;
   carouselIndex?: number;
@@ -17,6 +18,16 @@ export interface PhotoItem {
 
 export interface DateGroup {
   dateTitle: string; // e.g. "Hôm nay", "Hôm qua", "11 Tháng 11, 2026"
+  photos: PhotoItem[];
+}
+
+export interface PostAlbum {
+  id: string; // key from originalUrl or groupedId
+  title: string;
+  originalUrl?: string;
+  author: string;
+  date: Date;
+  coverPhoto: PhotoItem;
   photos: PhotoItem[];
 }
 

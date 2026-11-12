@@ -37,20 +37,20 @@ export const Header: React.FC<HeaderProps> = ({
         </div>
       </div>
 
-      {/* iOS Segmented Control (Năm / Tháng / Ngày / Tất cả) */}
+      {/* iOS Segmented Control */}
       <div className="px-4 pb-2">
-        <div className="flex p-1 bg-neutral-900/90 rounded-lg text-xs font-medium text-neutral-400">
-          {["Tất cả", "Hôm nay", "Tuần này", "Album"].map((tab) => (
+        <div className="flex p-1 bg-neutral-900/90 rounded-lg text-xs font-medium text-neutral-400 overflow-x-auto scrollbar-none">
+          {["Tất cả", "Hôm nay", "Tuần này", "Yêu thích", "Album"].map((tab) => (
             <button
               key={tab}
               onClick={() => onFilterChange(tab)}
-              className={`flex-1 py-1.5 rounded-md transition-all text-center ${
+              className={`flex-1 min-w-[64px] py-1.5 rounded-md transition-all text-center whitespace-nowrap ${
                 activeFilter === tab
                   ? "bg-neutral-700 text-white shadow-sm font-semibold"
                   : "hover:text-neutral-200"
               }`}
             >
-              {tab}
+              {tab === "Yêu thích" ? "❤️ " + tab : tab}
             </button>
           ))}
         </div>
