@@ -14,41 +14,51 @@
     -webkit-tap-highlight-color: transparent;
     user-select: none;
     -webkit-user-select: none;
-    background-color: #070709;
+    background-color: #000000;
     color: #ffffff;
     overscroll-behavior-y: none;
   }
 }
 
-/* Liquid Glass iOS 26 Design System */
-.liquid-glass-pill {
-  background: rgba(30, 32, 40, 0.65);
-  backdrop-filter: blur(36px) saturate(190%);
-  -webkit-backdrop-filter: blur(36px) saturate(190%);
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  box-shadow: inset 0 1px 1px 0 rgba(255, 255, 255, 0.22), 0 12px 36px -4px rgba(0, 0, 0, 0.55);
+/* Authentic iOS 18 / 26 Photos Liquid Glass Dock */
+.ios-photos-dock {
+  background: rgba(40, 42, 52, 0.45);
+  backdrop-filter: blur(48px) saturate(220%) brightness(1.1);
+  -webkit-backdrop-filter: blur(48px) saturate(220%) brightness(1.1);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  box-shadow: 0 20px 50px -10px rgba(0, 0, 0, 0.75), inset 0 1px 2px 0 rgba(255, 255, 255, 0.4);
 }
 
+.ios-photos-dock-active {
+  background: rgba(255, 255, 255, 0.24);
+  border: 0.5px solid rgba(255, 255, 255, 0.4);
+  box-shadow: inset 0 1px 2px rgba(255, 255, 255, 0.45), 0 4px 14px rgba(0, 0, 0, 0.3);
+}
+
+/* Liquid Glass Cards & Modals */
 .liquid-glass-card {
-  background: rgba(24, 25, 32, 0.58);
-  backdrop-filter: blur(30px) saturate(180%);
-  -webkit-backdrop-filter: blur(30px) saturate(180%);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.15), 0 14px 34px -6px rgba(0, 0, 0, 0.45);
-}
-
-.liquid-glass-active {
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.28) 0%, rgba(255, 255, 255, 0.1) 100%);
-  border: 1px solid rgba(255, 255, 255, 0.35);
-  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.4), 0 4px 18px rgba(0, 0, 0, 0.3);
+  background: rgba(26, 28, 36, 0.6);
+  backdrop-filter: blur(32px) saturate(190%);
+  -webkit-backdrop-filter: blur(32px) saturate(190%);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow: inset 0 1px 1px 0 rgba(255, 255, 255, 0.18), 0 14px 34px -6px rgba(0, 0, 0, 0.5);
 }
 
 .liquid-glass-sheet {
-  background: rgba(20, 21, 28, 0.82);
-  backdrop-filter: blur(48px) saturate(200%);
-  -webkit-backdrop-filter: blur(48px) saturate(200%);
+  background: rgba(18, 20, 26, 0.85);
+  backdrop-filter: blur(52px) saturate(210%);
+  -webkit-backdrop-filter: blur(52px) saturate(210%);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  box-shadow: inset 0 1px 1px 0 rgba(255, 255, 255, 0.3), 0 -12px 45px rgba(0, 0, 0, 0.8);
+}
+
+/* Circular iOS Button */
+.ios-circle-btn {
+  background: rgba(35, 36, 42, 0.8);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
   border: 1px solid rgba(255, 255, 255, 0.18);
-  box-shadow: inset 0 1px 1px 0 rgba(255, 255, 255, 0.25), 0 -10px 40px rgba(0, 0, 0, 0.7);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
 }
 
 /* Hide scrollbars for clean iOS aesthetic */
@@ -59,4 +69,3 @@
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
-

@@ -9,6 +9,7 @@ import { Header } from "./components/Header";
 import { PhotoGrid } from "./components/PhotoGrid";
 import { PhotoViewer } from "./components/PhotoViewer";
 import { TabBar } from "./components/TabBar";
+import { CollectionsView } from "./components/CollectionsView";
 import { SettingsModal } from "./components/SettingsModal";
 import { AddPhotoModal } from "./components/AddPhotoModal";
 import { App as CapApp } from "@capacitor/app";
@@ -16,16 +17,13 @@ import { Clipboard } from "@capacitor/clipboard";
 import {
   RefreshCw,
   Search,
-  Folder,
   Sparkles,
   ShieldCheck,
   ChevronRight,
   AlertCircle,
   Heart,
-  Layers,
   ExternalLink,
   ChevronLeft,
-  User,
   Calendar,
   Plus,
 } from "lucide-react";
@@ -36,7 +34,7 @@ export const App: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [selectedPhoto, setSelectedPhoto] = useState<PhotoItem | null>(null);
-  const [currentTab, setCurrentTab] = useState("library");
+  const [currentTab, setCurrentTab] = useState<"library" | "collections" | "search">("collections");
   const [activeFilter, setActiveFilter] = useState("Tất cả");
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -187,7 +185,7 @@ export const App: React.FC = () => {
     return albums.sort((a, b) => b.date.getTime() - a.date.getTime());
   }, [photos]);
 
-  // Danh sách tác giả nổi bật cho tab Kỷ niệm
+  // Danh sách tác giả nổi bật
   const featuredCreators = useMemo(() => {
     const map = new Map<string, { count: number; cover: string }>();
     photos.forEach((p) => {
@@ -271,27 +269,16 @@ export const App: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-[#070709] text-white font-sans selection:bg-blue-600 relative overflow-x-hidden">
-      {/* Liquid Glass Dynamic Ambient Glow Orbs */}
+    <div className="min-h-screen bg-black text-white font-sans selection:bg-blue-600 relative overflow-x-hidden">
+      {/* Dynamic Ambient Blur Glow behind glass elements */}
       <div className="fixed inset-0 pointer-events-none overflow-hidden z-0">
-        <div className="absolute -top-32 -left-32 w-96 h-96 bg-purple-600/15 rounded-full blur-[100px]" />
-        <div className="absolute top-1/3 -right-32 w-96 h-96 bg-blue-600/15 rounded-full blur-[100px]" />
-        <div className="absolute -bottom-32 left-1/4 w-96 h-96 bg-pink-600/15 rounded-full blur-[100px]" />
+        <div className="absolute -top-32 -left-32 w-96 h-96 bg-purple-600/10 rounded-full blur-[120px]" />
+        <div className="absolute top-1/3 -right-32 w-96 h-96 bg-blue-600/10 rounded-full blur-[120px]" />
+        <div className="absolute -bottom-32 left-1/4 w-96 h-96 bg-pink-600/10 rounded-full blur-[120px]" />
       </div>
 
-      {/* Top Header */}
-      <Header
-        photoCount={filteredPhotos.length}
-        onOpenSettings={() => setIsSettingsOpen(true)}
-        activeFilter={activeFilter}
-        onFilterChange={(f) => {
-          setActiveFilter(f);
-          if (currentTab !== "library") setCurrentTab("library");
-        }}
-      />
-
-      {/* Main Content Area */}
-      <main className="max-w-md mx-auto min-h-[calc(100vh-140px)] relative z-10">
+      {/* Main Container */}
+      <main className="max-w-md mx-auto min-h-screen relative z-10 pt-[var(--sat)]">
         {/* Banner Phát hiện link Instagram từ Clipboard */}
         {clipboardPrompt && (
           <div className="mx-4 mt-3 mb-2 p-4 liquid-glass-card border border-pink-500/40 rounded-3xl flex items-center justify-between shadow-2xl animate-in slide-in-from-top duration-300">
@@ -340,9 +327,9 @@ export const App: React.FC = () => {
                 <ShieldCheck className="w-6 h-6" />
               </div>
               <div>
-                <div className="text-sm font-bold text-white">Chưa đăng nhập Telegram</div>
+                <div className="text-sm font-bold text-white">Chưa kết nối Telegram</div>
                 <div className="text-xs text-blue-200/90 mt-0.5 leading-snug">
-                  Chạm để nhập SĐT & nhận mã OTP kết nối kho ảnh
+                  Chạm để nhập SĐT & nhận mã OTP đọc ảnh từ kênh
                 </div>
               </div>
             </div>
@@ -366,9 +353,111 @@ export const App: React.FC = () => {
           </div>
         )}
 
-        {/* TAB 1: THƯ VIỆN (LIBRARY) */}
+        {/* ======================================================== */}
+        {/* VIEW 1: BỘ SƯU TẬP (COLLECTIONS VIEW) - CHUẨN IOS 18/26  */}
+        {/* ======================================================== */}
+        {currentTab === "collections" && !selectedAlbum && (
+          <CollectionsView
+            photos={photos}
+            favoritesCount={favorites.size}
+            postAlbums={postAlbums}
+            featuredCreators={featuredCreators}
+            onSelectPhoto={(p) => setSelectedPhoto(p)}
+            onOpenSettings={() => setIsSettingsOpen(true)}
+            onOpenFavorites={() => {
+              setActiveFilter("Yêu thích");
+              setCurrentTab("library");
+            }}
+            onOpenRecent={() => {
+              setActiveFilter("Hôm nay");
+              setCurrentTab("library");
+            }}
+            onOpenCarousels={() => {
+              setActiveFilter("Album");
+              setCurrentTab("library");
+            }}
+            onSelectAlbum={(album) => setSelectedAlbum(album)}
+            onSelectCreator={(author) => {
+              setSearchQuery(author);
+              setCurrentTab("search");
+            }}
+          />
+        )}
+
+        {/* Xem chi tiết 1 Album cụ thể bên trong Bộ sưu tập */}
+        {currentTab === "collections" && selectedAlbum && (
+          <div className="p-4 pb-36 animate-in fade-in duration-200">
+            <div className="flex items-center justify-between mb-4 pb-3 border-b border-white/10">
+              <button
+                onClick={() => setSelectedAlbum(null)}
+                className="flex items-center ios-photos-dock rounded-full px-4 py-2 text-blue-400 text-sm font-semibold active:scale-95 transition-all -ml-1"
+              >
+                <ChevronLeft className="w-5 h-5 mr-1" />
+                <span>Bộ sưu tập</span>
+              </button>
+              <span className="text-xs text-white/80 font-medium px-2.5 py-1 rounded-full bg-white/10 border border-white/15">
+                {selectedAlbum.photos.length} bức ảnh
+              </span>
+            </div>
+
+            <div className="mb-4 liquid-glass-card rounded-3xl p-4 border border-white/15 shadow-xl">
+              <h2 className="text-xl font-bold text-white flex items-center gap-2">
+                {selectedAlbum.title}
+              </h2>
+              <p className="text-xs text-neutral-300 mt-1.5 flex items-center gap-1.5">
+                <Calendar className="w-3.5 h-3.5 text-blue-400" />
+                <span>
+                  {selectedAlbum.date.toLocaleDateString("vi-VN", {
+                    day: "numeric",
+                    month: "long",
+                    year: "numeric",
+                  })}
+                </span>
+              </p>
+              {selectedAlbum.originalUrl && (
+                <a
+                  href={selectedAlbum.originalUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 mt-3 text-xs text-pink-400 underline font-semibold active:opacity-70"
+                >
+                  <span>Xem bài viết gốc trên Instagram</span>
+                  <ExternalLink className="w-3.5 h-3.5" />
+                </a>
+              )}
+            </div>
+
+            <div className="grid grid-cols-3 gap-2">
+              {selectedAlbum.photos.map((photo) => (
+                <div
+                  key={photo.id}
+                  onClick={() => setSelectedPhoto(photo)}
+                  className="aspect-square rounded-2xl bg-neutral-900 border border-white/10 overflow-hidden cursor-pointer active:scale-95 transition-all shadow-sm"
+                >
+                  <img
+                    src={photo.thumbnailUrl || photo.url}
+                    alt=""
+                    className="w-full h-full object-cover"
+                    loading="lazy"
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* ======================================================== */}
+        {/* VIEW 2: THƯ VIỆN (LIBRARY PHOTO GRID)                   */}
+        {/* ======================================================== */}
         {currentTab === "library" && (
-          <>
+          <div>
+            <Header
+              photoCount={filteredPhotos.length}
+              onOpenSettings={() => setIsSettingsOpen(true)}
+              activeFilter={activeFilter}
+              onFilterChange={(f) => setActiveFilter(f)}
+            />
+
             {loading && (
               <div className="flex items-center justify-center py-10 gap-2.5 text-neutral-400 text-sm">
                 <RefreshCw className="w-5 h-5 animate-spin text-blue-400" />
@@ -392,20 +481,23 @@ export const App: React.FC = () => {
               groups={groupedPhotos}
               onSelectPhoto={(p) => setSelectedPhoto(p)}
             />
-          </>
+          </div>
         )}
 
-        {/* TAB 2: TÌM KIẾM (SEARCH) */}
+        {/* ======================================================== */}
+        {/* VIEW 3: TÌM KIẾM (SEARCH)                                */}
+        {/* ======================================================== */}
         {currentTab === "search" && (
-          <div className="p-4 animate-in fade-in duration-200">
+          <div className="p-4 pb-36 animate-in fade-in duration-200">
             <div className="relative mb-4">
               <Search className="w-5 h-5 text-neutral-400 absolute left-4 top-3.5" />
               <input
                 type="text"
-                placeholder="Tìm theo @username hoặc caption..."
+                autoFocus
+                placeholder="Tìm theo @username hoặc nội dung..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full liquid-glass-card rounded-2xl pl-12 pr-4 py-3.5 text-sm text-white placeholder-neutral-400 border border-white/15 focus:outline-none focus:border-blue-400 transition-colors shadow-inner"
+                className="w-full ios-photos-dock rounded-2xl pl-12 pr-4 py-3.5 text-sm text-white placeholder-neutral-400 border border-white/20 focus:outline-none focus:border-cyan-400 transition-colors shadow-inner"
               />
             </div>
             <PhotoGrid
@@ -414,314 +506,35 @@ export const App: React.FC = () => {
             />
           </div>
         )}
-
-        {/* TAB 3: ALBUMS (BỘ SƯU TẬP THEO BÀI VIẾT / LINK TẢI) */}
-        {currentTab === "albums" && (
-          <div className="p-4 pb-36 animate-in fade-in duration-200">
-            {selectedAlbum ? (
-              /* Giao diện xem chi tiết 1 Album cụ thể */
-              <div>
-                <div className="flex items-center justify-between mb-4 pb-3 border-b border-white/10">
-                  <button
-                    onClick={() => setSelectedAlbum(null)}
-                    className="flex items-center liquid-glass-pill rounded-full px-3.5 py-1.5 text-blue-400 text-sm font-semibold active:scale-95 transition-all -ml-1"
-                  >
-                    <ChevronLeft className="w-5 h-5 mr-1" />
-                    <span>Tất cả Album</span>
-                  </button>
-                  <span className="text-xs text-white/80 font-medium px-2.5 py-1 rounded-full bg-white/10 border border-white/15">
-                    {selectedAlbum.photos.length} bức ảnh
-                  </span>
-                </div>
-
-                <div className="mb-4 liquid-glass-card rounded-3xl p-4 border border-white/15 shadow-xl">
-                  <h2 className="text-xl font-bold text-white flex items-center gap-2">
-                    {selectedAlbum.title}
-                  </h2>
-                  <p className="text-xs text-neutral-300 mt-1.5 flex items-center gap-1.5">
-                    <Calendar className="w-3.5 h-3.5 text-blue-400" />
-                    <span>
-                      {selectedAlbum.date.toLocaleDateString("vi-VN", {
-                        day: "numeric",
-                        month: "long",
-                        year: "numeric",
-                      })}
-                    </span>
-                  </p>
-                  {selectedAlbum.originalUrl && (
-                    <a
-                      href={selectedAlbum.originalUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1.5 mt-3 text-xs text-pink-400 underline font-semibold active:opacity-70"
-                    >
-                      <span>Xem bài viết gốc trên Instagram</span>
-                      <ExternalLink className="w-3.5 h-3.5" />
-                    </a>
-                  )}
-                </div>
-
-                <div className="grid grid-cols-3 gap-2">
-                  {selectedAlbum.photos.map((photo) => (
-                    <div
-                      key={photo.id}
-                      onClick={() => setSelectedPhoto(photo)}
-                      className="aspect-square rounded-2xl bg-neutral-900 border border-white/10 overflow-hidden cursor-pointer active:scale-95 transition-all shadow-sm"
-                    >
-                      <img
-                        src={photo.thumbnailUrl || photo.url}
-                        alt=""
-                        className="w-full h-full object-cover"
-                        loading="lazy"
-                      />
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ) : (
-              /* Danh sách tổng thể các Albums */
-              <div>
-                <h2 className="text-xl font-bold mb-4 flex items-center gap-2.5 text-white">
-                  <span className="w-8 h-8 rounded-xl bg-blue-500/20 text-blue-400 flex items-center justify-center border border-blue-500/30">
-                    <Folder className="w-5 h-5" />
-                  </span>
-                  Bộ sưu tập Album
-                </h2>
-
-                {/* Danh mục đặc biệt */}
-                <div className="grid grid-cols-2 gap-3 mb-6">
-                  {/* Mục Yêu Thích */}
-                  <div
-                    onClick={() => {
-                      setActiveFilter("Yêu thích");
-                      setCurrentTab("library");
-                    }}
-                    className="liquid-glass-card rounded-3xl p-5 border border-white/15 cursor-pointer active:scale-95 transition-all shadow-xl group"
-                  >
-                    <div className="w-12 h-12 rounded-2xl bg-red-500/20 border border-red-500/30 text-red-500 flex items-center justify-center mb-3 shadow-inner group-hover:scale-105 transition-transform">
-                      <Heart className="w-6 h-6 fill-red-500" />
-                    </div>
-                    <h3 className="font-bold text-base text-white">Yêu thích</h3>
-                    <p className="text-xs text-neutral-400 mt-1">
-                      {favorites.size} ảnh đã lưu
-                    </p>
-                  </div>
-
-                  {/* Bài viết nhiều ảnh (Carousels) */}
-                  <div
-                    onClick={() => {
-                      setActiveFilter("Album");
-                      setCurrentTab("library");
-                    }}
-                    className="liquid-glass-card rounded-3xl p-5 border border-white/15 cursor-pointer active:scale-95 transition-all shadow-xl group"
-                  >
-                    <div className="w-12 h-12 rounded-2xl bg-purple-500/20 border border-purple-500/30 text-purple-400 flex items-center justify-center mb-3 shadow-inner group-hover:scale-105 transition-transform">
-                      <Layers className="w-6 h-6" />
-                    </div>
-                    <h3 className="font-bold text-base text-white">Carousels</h3>
-                    <p className="text-xs text-neutral-400 mt-1">
-                      {postAlbums.filter((a) => a.photos.length > 1).length} bài viết
-                    </p>
-                  </div>
-                </div>
-
-                {/* Danh sách các Album theo Link tải Instagram */}
-                <div className="mb-3.5 flex items-center justify-between">
-                  <h3 className="text-sm font-bold text-neutral-200">
-                    Album theo bài viết ({postAlbums.length})
-                  </h3>
-                </div>
-
-                <div className="grid grid-cols-2 gap-3.5">
-                  {postAlbums.map((album) => (
-                    <div
-                      key={album.id}
-                      onClick={() => setSelectedAlbum(album)}
-                      className="liquid-glass-card rounded-3xl overflow-hidden border border-white/15 cursor-pointer active:scale-95 transition-all group shadow-xl"
-                    >
-                      <div className="aspect-square relative overflow-hidden bg-neutral-900 rounded-t-2xl">
-                        <img
-                          src={album.coverPhoto.thumbnailUrl || album.coverPhoto.url}
-                          alt=""
-                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                          loading="lazy"
-                        />
-                        <div className="absolute top-2.5 right-2.5 bg-black/70 backdrop-blur-md px-2.5 py-1 rounded-full flex items-center gap-1 text-[11px] font-bold text-white border border-white/20 shadow-md">
-                          <Layers className="w-3.5 h-3.5 text-blue-400" />
-                          <span>{album.photos.length}</span>
-                        </div>
-                      </div>
-                      <div className="p-3.5">
-                        <h4 className="font-bold text-sm text-white truncate">
-                          {album.title}
-                        </h4>
-                        <p className="text-xs text-neutral-400 mt-0.5">
-                          {album.date.toLocaleDateString("vi-VN", {
-                            day: "numeric",
-                            month: "short",
-                          })}
-                        </p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* TAB 4: KỶ NIỆM (MEMORIES) - THIẾT KẾ ĐẦY ĐỦ GỢI Ý */}
-        {currentTab === "memories" && (
-          <div className="p-4 pb-36 space-y-6 animate-in fade-in duration-200">
-            {/* Header Kỷ niệm */}
-            <div>
-              <h2 className="text-xl font-bold flex items-center gap-2.5 text-white">
-                <span className="w-8 h-8 rounded-xl bg-purple-500/20 text-purple-400 flex items-center justify-center border border-purple-500/30">
-                  <Sparkles className="w-5 h-5" />
-                </span>
-                Dành Cho Bạn
-              </h2>
-              <p className="text-xs text-neutral-400 mt-1">
-                Các khoảnh khắc và bộ sưu tập được gợi ý tự động
-              </p>
-            </div>
-
-            {/* Hero Card: Kỷ niệm nổi bật */}
-            {photos.length > 0 && (
-              <div
-                onClick={() => setSelectedPhoto(photos[0])}
-                className="relative h-72 rounded-3xl overflow-hidden cursor-pointer shadow-2xl border border-white/20 active:scale-98 transition-all group"
-              >
-                <img
-                  src={photos[0].url}
-                  alt=""
-                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/40 to-transparent flex flex-col justify-end p-5">
-                  <span className="px-3 py-1 bg-purple-600/80 border border-purple-400/40 backdrop-blur-md rounded-full text-[10px] font-extrabold uppercase tracking-wider text-white w-fit mb-2 shadow-lg">
-                    Khoảnh khắc mới nhất
-                  </span>
-                  <h3 className="text-lg font-bold text-white leading-snug">
-                    {photos[0].caption ? photos[0].caption.slice(0, 50) + "..." : "Ảnh Instagram mới nhất"}
-                  </h3>
-                  <p className="text-xs text-neutral-300 mt-1">
-                    @{photos[0].author || "Instagram"} • {photos[0].date.toLocaleDateString("vi-VN")}
-                  </p>
-                </div>
-              </div>
-            )}
-
-            {/* Mục: Tác giả nổi bật */}
-            {featuredCreators.length > 0 && (
-              <div>
-                <h3 className="text-sm font-bold text-neutral-200 mb-3.5 flex items-center gap-2">
-                  <User className="w-4 h-4 text-blue-400" />
-                  Tác giả lưu trữ nhiều nhất
-                </h3>
-                <div className="flex gap-3.5 overflow-x-auto pb-2 no-scrollbar">
-                  {featuredCreators.map((creator) => (
-                    <div
-                      key={creator.author}
-                      onClick={() => {
-                        setSearchQuery(creator.author);
-                        setCurrentTab("search");
-                      }}
-                      className="flex flex-col items-center shrink-0 w-20 cursor-pointer active:scale-95 transition-all"
-                    >
-                      <div className="w-18 h-18 rounded-full overflow-hidden p-0.5 bg-gradient-to-tr from-yellow-400 via-pink-500 to-purple-600 mb-2 shadow-xl">
-                        <img
-                          src={creator.cover}
-                          alt=""
-                          className="w-full h-full object-cover rounded-full bg-neutral-900"
-                        />
-                      </div>
-                      <p className="text-xs font-bold text-white truncate w-full text-center">
-                        @{creator.author}
-                      </p>
-                      <span className="text-[11px] text-neutral-400">
-                        {creator.count} ảnh
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Mục: Bộ sưu tập Carousels */}
-            {postAlbums.filter((a) => a.photos.length > 1).length > 0 && (
-              <div>
-                <h3 className="text-sm font-bold text-neutral-200 mb-3 flex items-center gap-2">
-                  <Layers className="w-4 h-4 text-purple-400" />
-                  Bài viết nhiều ảnh đáng nhớ
-                </h3>
-                <div className="space-y-3">
-                  {postAlbums
-                    .filter((a) => a.photos.length > 1)
-                    .slice(0, 3)
-                    .map((album) => (
-                      <div
-                        key={album.id}
-                        onClick={() => {
-                          setSelectedAlbum(album);
-                          setCurrentTab("albums");
-                        }}
-                        className="p-3.5 liquid-glass-card rounded-3xl border border-white/15 flex items-center gap-3.5 cursor-pointer active:scale-98 transition-all shadow-xl"
-                      >
-                        <div className="w-16 h-16 rounded-2xl overflow-hidden bg-neutral-900 border border-white/10 shrink-0">
-                          <img
-                            src={album.coverPhoto.thumbnailUrl || album.coverPhoto.url}
-                            alt=""
-                            className="w-full h-full object-cover"
-                          />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <h4 className="font-bold text-sm text-white truncate">
-                            {album.title}
-                          </h4>
-                          <p className="text-xs text-neutral-400 mt-0.5 truncate">
-                            {album.coverPhoto.caption || "Bài viết Instagram"}
-                          </p>
-                          <span className="inline-block mt-1 text-[11px] text-purple-300 bg-purple-950/60 border border-purple-500/30 px-2.5 py-0.5 rounded-full font-semibold">
-                            {album.photos.length} ảnh
-                          </span>
-                        </div>
-                        <ChevronRight className="w-5 h-5 text-neutral-400 shrink-0" />
-                      </div>
-                    ))}
-                </div>
-              </div>
-            )}
-          </div>
-        )}
       </main>
 
-      {/* Floating Action Buttons: Larger 56px and 48px sizes, easy thumb tapping */}
-      <div className="fixed right-5 bottom-[92px] z-20 flex flex-col gap-3 items-end">
+      {/* Floating Action Buttons: Nút Thêm link (+) & Làm mới (↻) */}
+      <div className="fixed right-5 bottom-[88px] z-30 flex flex-col gap-3 items-end">
         {/* Nút Thêm link Instagram */}
         <button
           onClick={() => {
             setAddUrl("");
             setIsAddModalOpen(true);
           }}
-          className="w-14 h-14 rounded-full bg-gradient-to-tr from-yellow-400 via-pink-500 to-purple-600 text-white shadow-2xl shadow-pink-600/40 border-2 border-white/25 flex items-center justify-center transition-all active:scale-90"
+          className="w-13 h-13 rounded-full bg-gradient-to-tr from-yellow-400 via-pink-500 to-purple-600 text-white shadow-2xl shadow-pink-600/40 border border-white/30 flex items-center justify-center transition-all active:scale-90"
           title="Tải ảnh mới từ Instagram"
         >
-          <Plus className="w-7 h-7 stroke-[2.5]" />
+          <Plus className="w-6 h-6 stroke-[2.5]" />
         </button>
 
         {/* Nút Làm mới thư viện */}
         <button
           onClick={loadPhotos}
           disabled={loading}
-          className="w-12 h-12 rounded-full liquid-glass-pill border border-white/25 active:bg-white/20 text-white shadow-xl flex items-center justify-center transition-all active:scale-90"
+          className="w-11 h-11 rounded-full ios-photos-dock active:bg-white/20 text-white shadow-xl flex items-center justify-center transition-all active:scale-90"
           title="Làm mới ảnh"
         >
-          <RefreshCw className={`w-5 h-5 ${loading ? "animate-spin text-blue-400" : ""}`} />
+          <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin text-cyan-400" : ""}`} />
         </button>
       </div>
 
-      {/* iOS Bottom TabBar */}
-      <TabBar currentTab={currentTab} onTabChange={setCurrentTab} />
+      {/* Authentic iOS 18/26 Photos Floating Dock Bar */}
+      <TabBar currentTab={currentTab} onTabChange={(t) => setCurrentTab(t as any)} />
 
       {/* Modal Tải Ảnh Từ Instagram */}
       <AddPhotoModal
