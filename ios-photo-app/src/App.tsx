@@ -5,7 +5,6 @@ import {
   saveStoredConfig,
   fetchChannelPhotos,
 } from "./services/telegramClient";
-import { Header } from "./components/Header";
 import { PhotoGrid } from "./components/PhotoGrid";
 import { PhotoViewer } from "./components/PhotoViewer";
 import { TabBar } from "./components/TabBar";
@@ -26,6 +25,7 @@ import {
   ChevronLeft,
   Calendar,
   Plus,
+  Settings,
 } from "lucide-react";
 
 export const App: React.FC = () => {
@@ -34,7 +34,7 @@ export const App: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [selectedPhoto, setSelectedPhoto] = useState<PhotoItem | null>(null);
-  const [currentTab, setCurrentTab] = useState<"library" | "collections" | "search">("collections");
+  const [currentTab, setCurrentTab] = useState<"library" | "collections" | "search">("library");
   const [activeFilter, setActiveFilter] = useState("Tất cả");
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -212,13 +212,7 @@ export const App: React.FC = () => {
       );
     }
 
-    if (activeFilter === "Hôm nay") {
-      const today = new Date().toDateString();
-      list = list.filter((p) => p.date.toDateString() === today);
-    } else if (activeFilter === "Tuần này") {
-      const sevenDaysAgo = Date.now() - 7 * 86400000;
-      list = list.filter((p) => p.date.getTime() >= sevenDaysAgo);
-    } else if (activeFilter === "Yêu thích") {
+    if (activeFilter === "Yêu thích") {
       list = list.filter(
         (p) =>
           favorites.has(String(p.id)) || favorites.has(String(p.messageId))
@@ -230,25 +224,31 @@ export const App: React.FC = () => {
     return list;
   }, [photos, activeFilter, searchQuery, favorites]);
 
-  // Gom nhóm ảnh theo ngày (Apple Photos format)
+  // Gom nhóm ảnh theo Năm, Tháng, hoặc Ngày (Tất cả) chuẩn Apple Photos
   const groupedPhotos: DateGroup[] = useMemo(() => {
     const map = new Map<string, PhotoItem[]>();
-    const today = new Date().toDateString();
-    const yesterday = new Date(Date.now() - 86400000).toDateString();
 
     filteredPhotos.forEach((photo) => {
-      const dStr = photo.date.toDateString();
       let title = "";
-      if (dStr === today) {
-        title = "Hôm nay";
-      } else if (dStr === yesterday) {
-        title = "Hôm qua";
+      if (activeFilter === "Năm") {
+        title = `Năm ${photo.date.getFullYear()}`;
+      } else if (activeFilter === "Tháng") {
+        title = `Tháng ${photo.date.getMonth() + 1}, ${photo.date.getFullYear()}`;
       } else {
-        title = photo.date.toLocaleDateString("vi-VN", {
-          day: "numeric",
-          month: "long",
-          year: "numeric",
-        });
+        const today = new Date().toDateString();
+        const yesterday = new Date(Date.now() - 86400000).toDateString();
+        const dStr = photo.date.toDateString();
+        if (dStr === today) {
+          title = "Hôm nay";
+        } else if (dStr === yesterday) {
+          title = "Hôm qua";
+        } else {
+          title = photo.date.toLocaleDateString("vi-VN", {
+            day: "numeric",
+            month: "long",
+            year: "numeric",
+          });
+        }
       }
 
       if (!map.has(title)) {
@@ -261,7 +261,7 @@ export const App: React.FC = () => {
       dateTitle,
       photos: pList,
     }));
-  }, [filteredPhotos]);
+  }, [filteredPhotos, activeFilter]);
 
   const handleSaveConfig = (newCfg: TelegramConfig) => {
     setConfig(newCfg);
@@ -354,7 +354,52 @@ export const App: React.FC = () => {
         )}
 
         {/* ======================================================== */}
-        {/* VIEW 1: BỘ SƯU TẬP (COLLECTIONS VIEW) - CHUẨN IOS 18/26  */}
+        {/* VIEW 1: THƯ VIỆN (LIBRARY) - KHÔNG GIAN ẢNH TRÀN VIỀN    */}
+        {/* ======================================================== */}
+        {currentTab === "library" && (
+          <div>
+            {/* Top Bar tối giản với nút Cài đặt Telegram */}
+            <div className="flex items-center justify-between px-4 pt-1 pb-1">
+              <div className="text-xs font-semibold text-neutral-400 flex items-center gap-1.5">
+                <span>{filteredPhotos.length} ảnh trong kho</span>
+              </div>
+              <button
+                onClick={() => setIsSettingsOpen(true)}
+                className="ios-circle-btn w-9 h-9 rounded-full flex items-center justify-center text-neutral-300 active:scale-95 transition-all"
+                title="Cài đặt Telegram"
+              >
+                <Settings className="w-4 h-4" />
+              </button>
+            </div>
+
+            {loading && (
+              <div className="flex items-center justify-center py-10 gap-2.5 text-neutral-400 text-sm">
+                <RefreshCw className="w-5 h-5 animate-spin text-cyan-400" />
+                <span className="font-medium">Đang đồng bộ ảnh từ Telegram...</span>
+              </div>
+            )}
+
+            {activeFilter === "Yêu thích" && filteredPhotos.length === 0 && !loading && (
+              <div className="p-8 text-center my-12 mx-4 liquid-glass-card rounded-3xl border border-white/10 shadow-xl">
+                <div className="w-16 h-16 rounded-full bg-red-500/20 border border-red-500/30 text-red-400 flex items-center justify-center mx-auto mb-3.5 shadow-lg">
+                  <Heart className="w-8 h-8 fill-red-500/30 text-red-400" />
+                </div>
+                <h3 className="font-bold text-lg mb-1 text-white">Chưa có ảnh yêu thích</h3>
+                <p className="text-xs text-neutral-400 max-w-xs mx-auto leading-relaxed">
+                  Hãy mở bất kỳ bức ảnh nào và chạm vào biểu tượng trái tim để thêm vào đây.
+                </p>
+              </div>
+            )}
+
+            <PhotoGrid
+              groups={groupedPhotos}
+              onSelectPhoto={(p) => setSelectedPhoto(p)}
+            />
+          </div>
+        )}
+
+        {/* ======================================================== */}
+        {/* VIEW 2: BỘ SƯU TẬP (COLLECTIONS) - CHUẨN IOS 18/26       */}
         {/* ======================================================== */}
         {currentTab === "collections" && !selectedAlbum && (
           <CollectionsView
@@ -369,7 +414,7 @@ export const App: React.FC = () => {
               setCurrentTab("library");
             }}
             onOpenRecent={() => {
-              setActiveFilter("Hôm nay");
+              setActiveFilter("Tất cả");
               setCurrentTab("library");
             }}
             onOpenCarousels={() => {
@@ -384,13 +429,13 @@ export const App: React.FC = () => {
           />
         )}
 
-        {/* Xem chi tiết 1 Album cụ thể bên trong Bộ sưu tập */}
+        {/* Xem chi tiết 1 Album cụ thể */}
         {currentTab === "collections" && selectedAlbum && (
           <div className="p-4 pb-36 animate-in fade-in duration-200">
             <div className="flex items-center justify-between mb-4 pb-3 border-b border-white/10">
               <button
                 onClick={() => setSelectedAlbum(null)}
-                className="flex items-center ios-photos-dock rounded-full px-4 py-2 text-blue-400 text-sm font-semibold active:scale-95 transition-all -ml-1"
+                className="flex items-center apple-glass-lens rounded-full px-4 py-2 text-cyan-400 text-sm font-semibold active:scale-95 transition-all -ml-1"
               >
                 <ChevronLeft className="w-5 h-5 mr-1" />
                 <span>Bộ sưu tập</span>
@@ -447,44 +492,6 @@ export const App: React.FC = () => {
         )}
 
         {/* ======================================================== */}
-        {/* VIEW 2: THƯ VIỆN (LIBRARY PHOTO GRID)                   */}
-        {/* ======================================================== */}
-        {currentTab === "library" && (
-          <div>
-            <Header
-              photoCount={filteredPhotos.length}
-              onOpenSettings={() => setIsSettingsOpen(true)}
-              activeFilter={activeFilter}
-              onFilterChange={(f) => setActiveFilter(f)}
-            />
-
-            {loading && (
-              <div className="flex items-center justify-center py-10 gap-2.5 text-neutral-400 text-sm">
-                <RefreshCw className="w-5 h-5 animate-spin text-blue-400" />
-                <span className="font-medium">Đang đồng bộ ảnh từ Telegram...</span>
-              </div>
-            )}
-
-            {activeFilter === "Yêu thích" && filteredPhotos.length === 0 && !loading && (
-              <div className="p-8 text-center my-12 mx-4 liquid-glass-card rounded-3xl border border-white/10 shadow-xl">
-                <div className="w-16 h-16 rounded-full bg-red-500/20 border border-red-500/30 text-red-400 flex items-center justify-center mx-auto mb-3.5 shadow-lg">
-                  <Heart className="w-8 h-8 fill-red-500/30 text-red-400" />
-                </div>
-                <h3 className="font-bold text-lg mb-1 text-white">Chưa có ảnh yêu thích</h3>
-                <p className="text-xs text-neutral-400 max-w-xs mx-auto leading-relaxed">
-                  Hãy mở bất kỳ bức ảnh nào và chạm vào biểu tượng trái tim để thêm vào đây.
-                </p>
-              </div>
-            )}
-
-            <PhotoGrid
-              groups={groupedPhotos}
-              onSelectPhoto={(p) => setSelectedPhoto(p)}
-            />
-          </div>
-        )}
-
-        {/* ======================================================== */}
         {/* VIEW 3: TÌM KIẾM (SEARCH)                                */}
         {/* ======================================================== */}
         {currentTab === "search" && (
@@ -497,7 +504,7 @@ export const App: React.FC = () => {
                 placeholder="Tìm theo @username hoặc nội dung..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full ios-photos-dock rounded-2xl pl-12 pr-4 py-3.5 text-sm text-white placeholder-neutral-400 border border-white/20 focus:outline-none focus:border-cyan-400 transition-colors shadow-inner"
+                className="w-full apple-glass-lens rounded-2xl pl-12 pr-4 py-3.5 text-sm text-white placeholder-neutral-400 border border-white/20 focus:outline-none focus:border-cyan-400 transition-colors shadow-inner"
               />
             </div>
             <PhotoGrid
@@ -509,14 +516,14 @@ export const App: React.FC = () => {
       </main>
 
       {/* Floating Action Buttons: Nút Thêm link (+) & Làm mới (↻) */}
-      <div className="fixed right-5 bottom-[88px] z-30 flex flex-col gap-3 items-end">
+      <div className="fixed right-4 bottom-24 z-30 flex flex-col gap-2.5 items-end">
         {/* Nút Thêm link Instagram */}
         <button
           onClick={() => {
             setAddUrl("");
             setIsAddModalOpen(true);
           }}
-          className="w-13 h-13 rounded-full bg-gradient-to-tr from-yellow-400 via-pink-500 to-purple-600 text-white shadow-2xl shadow-pink-600/40 border border-white/30 flex items-center justify-center transition-all active:scale-90"
+          className="w-12 h-12 rounded-full bg-gradient-to-tr from-yellow-400 via-pink-500 to-purple-600 text-white shadow-2xl shadow-pink-600/40 border border-white/30 flex items-center justify-center transition-all active:scale-90"
           title="Tải ảnh mới từ Instagram"
         >
           <Plus className="w-6 h-6 stroke-[2.5]" />
@@ -526,15 +533,20 @@ export const App: React.FC = () => {
         <button
           onClick={loadPhotos}
           disabled={loading}
-          className="w-11 h-11 rounded-full ios-photos-dock active:bg-white/20 text-white shadow-xl flex items-center justify-center transition-all active:scale-90"
+          className="w-10 h-10 rounded-full apple-glass-lens active:bg-white/20 text-white shadow-xl flex items-center justify-center transition-all active:scale-90"
           title="Làm mới ảnh"
         >
           <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin text-cyan-400" : ""}`} />
         </button>
       </div>
 
-      {/* Authentic iOS 18/26 Photos Floating Dock Bar */}
-      <TabBar currentTab={currentTab} onTabChange={(t) => setCurrentTab(t as any)} />
+      {/* Exact Apple iOS 18 / 26 Photos Floating Liquid Glass Dock */}
+      <TabBar
+        currentTab={currentTab}
+        onTabChange={(t) => setCurrentTab(t as any)}
+        activeFilter={activeFilter}
+        onFilterChange={(f) => setActiveFilter(f)}
+      />
 
       {/* Modal Tải Ảnh Từ Instagram */}
       <AddPhotoModal

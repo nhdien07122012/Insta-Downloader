@@ -1,57 +1,108 @@
 import React from "react";
-import { Images, Layers, Search } from "lucide-react";
+import { Search } from "lucide-react";
 
 interface TabBarProps {
   currentTab: string;
   onTabChange: (tab: string) => void;
+  activeFilter: string;
+  onFilterChange: (filter: string) => void;
 }
 
-export const TabBar: React.FC<TabBarProps> = ({ currentTab, onTabChange }) => {
+export const TabBar: React.FC<TabBarProps> = ({
+  currentTab,
+  onTabChange,
+  activeFilter,
+  onFilterChange,
+}) => {
   const isLibrary = currentTab === "library";
   const isCollections = currentTab === "collections";
   const isSearch = currentTab === "search";
 
-  return (
-    <div className="fixed inset-x-0 bottom-0 z-40 pointer-events-none pb-[calc(var(--sab)+8px)] px-5">
-      <div className="pointer-events-auto max-w-sm mx-auto flex items-center justify-center gap-2.5">
-        {/* Main Floating Liquid Glass Capsule: Thư viện & Bộ sưu tập */}
-        <div className="ios-photos-dock rounded-full p-1.5 flex items-center gap-1 shadow-2xl">
-          {/* Nút: Thư viện */}
-          <button
-            onClick={() => onTabChange("library")}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-full transition-all duration-200 active:scale-95 ${
-              isLibrary
-                ? "ios-photos-dock-active text-white font-bold"
-                : "text-neutral-400 hover:text-white"
-            }`}
-          >
-            <Images className={`w-5 h-5 ${isLibrary ? "text-cyan-400" : "text-neutral-400"}`} />
-            <span className="text-xs font-semibold tracking-tight">Thư viện</span>
-          </button>
+  const filters = ["Năm", "Tháng", "Tất cả"];
 
-          {/* Nút: Bộ sưu tập */}
-          <button
-            onClick={() => onTabChange("collections")}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-full transition-all duration-200 active:scale-95 ${
-              isCollections
-                ? "ios-photos-dock-active text-white font-bold"
-                : "text-neutral-400 hover:text-white"
-            }`}
+  return (
+    <div className="fixed inset-x-0 bottom-0 z-40 pointer-events-none pb-[calc(var(--sab)+10px)] px-4">
+      <div className="pointer-events-auto max-w-md mx-auto flex items-center justify-center gap-2.5">
+        {/* Nút tròn bên trái: Biểu tượng 2 ảnh xếp chồng màu xanh Cyan (Apple Photos Icon) */}
+        <button
+          onClick={() => {
+            if (isCollections) {
+              onTabChange("library");
+            } else {
+              onTabChange("collections");
+            }
+          }}
+          className={`apple-glass-lens w-14 h-14 rounded-full flex items-center justify-center transition-all duration-200 active:scale-90 shadow-2xl ${
+            isCollections ? "ring-2 ring-cyan-400/60" : ""
+          }`}
+          title={isCollections ? "Xem Thư viện" : "Xem Bộ sưu tập"}
+        >
+          {/* Exact Apple Photos overlapping photos icon */}
+          <svg
+            className="w-7 h-7"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
           >
-            <Layers className={`w-5 h-5 ${isCollections ? "text-cyan-400" : "text-neutral-400"}`} />
-            <span className="text-xs font-semibold tracking-tight">Bộ sưu tập</span>
-          </button>
+            <rect
+              x="2"
+              y="6"
+              width="15"
+              height="14"
+              rx="3"
+              fill="#0ea5e9"
+              fillOpacity="0.4"
+              stroke="#38bdf8"
+            />
+            <path
+              d="M7 3h11a3 3 0 0 1 3 3v12"
+              stroke="#38bdf8"
+              strokeWidth="2"
+            />
+            <circle cx="7" cy="11" r="1.5" fill="#38bdf8" />
+            <path
+              d="m4 17 4-4 2.5 2.5 3.5-3.5 3 4"
+              stroke="#e0f2fe"
+              strokeWidth="1.8"
+            />
+          </svg>
+        </button>
+
+        {/* Viên nang kính lỏng trung tâm (Apple Liquid Glass Capsule: Năm | Tháng | Tất cả) */}
+        <div className="apple-glass-lens rounded-full p-1.5 flex items-center gap-1 shadow-2xl h-14">
+          {filters.map((f) => {
+            const isActive = activeFilter === f && isLibrary;
+            return (
+              <button
+                key={f}
+                onClick={() => {
+                  onFilterChange(f);
+                  if (!isLibrary) onTabChange("library");
+                }}
+                className={`min-w-[72px] px-4 py-2 rounded-full font-bold text-sm tracking-tight transition-all duration-200 active:scale-95 whitespace-nowrap text-center ${
+                  isActive
+                    ? "apple-glass-pill-active text-white shadow-lg drop-shadow"
+                    : "text-white/85 hover:text-white"
+                }`}
+              >
+                {f}
+              </button>
+            );
+          })}
         </div>
 
-        {/* Nút Tìm kiếm hình tròn riêng biệt (Search Circle Button) */}
+        {/* Nút tròn bên phải: Tìm kiếm kính lúp (Search Glass Circle) */}
         <button
           onClick={() => onTabChange("search")}
-          className={`ios-photos-dock w-12 h-12 rounded-full flex items-center justify-center transition-all duration-200 active:scale-95 shadow-2xl ${
-            isSearch ? "ios-photos-dock-active text-cyan-400" : "text-neutral-400 hover:text-white"
+          className={`apple-glass-lens w-14 h-14 rounded-full flex items-center justify-center transition-all duration-200 active:scale-90 shadow-2xl ${
+            isSearch ? "ring-2 ring-cyan-400/60" : ""
           }`}
           title="Tìm kiếm"
         >
-          <Search className={`w-5 h-5 ${isSearch ? "text-cyan-400 stroke-[2.5]" : "stroke-[2]"}`} />
+          <Search className="w-6 h-6 stroke-[2.8] text-white" />
         </button>
       </div>
     </div>
