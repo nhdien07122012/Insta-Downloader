@@ -1,0 +1,28 @@
+export interface PhotoItem {
+  id: string | number;
+  messageId: number;
+  url: string; // Blob URL or Direct Telegram CDN URL
+  thumbnailUrl?: string;
+  width?: number;
+  height?: number;
+  caption?: string;
+  author?: string;
+  originalUrl?: string;
+  date: Date;
+  isCarousel?: boolean;
+  carouselIndex?: number;
+  totalInCarousel?: number;
+  carouselItems?: PhotoItem[];
+}
+
+export interface DateGroup {
+  dateTitle: string; // e.g. "Hôm nay", "Hôm qua", "11 Tháng 11, 2026"
+  photos: PhotoItem[];
+}
+
+export interface TelegramConfig {
+  apiId: string;
+  apiHash: string;
+  botToken: string;
+  channelId: string;
+}

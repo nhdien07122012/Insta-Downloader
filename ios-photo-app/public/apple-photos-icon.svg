@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="115" fill="#ffffff"/>
+  <g transform="translate(256, 256)">
+    <!-- 8 Petals of Apple Photos -->
+    <path d="M 0,-190 C 25,-190 40,-130 0,-70 C -40,-130 -25,-190 0,-190" fill="#FF2D55" opacity="0.9"/>
+    <path d="M 0,-190 C 25,-190 40,-130 0,-70 C -40,-130 -25,-190 0,-190" fill="#FF9500" opacity="0.9" transform="rotate(45)"/>
+    <path d="M 0,-190 C 25,-190 40,-130 0,-70 C -40,-130 -25,-190 0,-190" fill="#FFCC00" opacity="0.9" transform="rotate(90)"/>
+    <path d="M 0,-190 C 25,-190 40,-130 0,-70 C -40,-130 -25,-190 0,-190" fill="#4CD964" opacity="0.9" transform="rotate(135)"/>
+    <path d="M 0,-190 C 25,-190 40,-130 0,-70 C -40,-130 -25,-190 0,-190" fill="#5AC8FA" opacity="0.9" transform="rotate(180)"/>
+    <path d="M 0,-190 C 25,-190 40,-130 0,-70 C -40,-130 -25,-190 0,-190" fill="#007AFF" opacity="0.9" transform="rotate(225)"/>
+    <path d="M 0,-190 C 25,-190 40,-130 0,-70 C -40,-130 -25,-190 0,-190" fill="#5856D6" opacity="0.9" transform="rotate(270)"/>
+    <path d="M 0,-190 C 25,-190 40,-130 0,-70 C -40,-130 -25,-190 0,-190" fill="#AF52DE" opacity="0.9" transform="rotate(315)"/>
+  </g>
+</svg>
