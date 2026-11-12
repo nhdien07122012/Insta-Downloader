@@ -1,0 +1,22 @@
+[Unit]
+Description=Instagram to Telegram Cloud Storage Bot
+After=network-online.target
+Wants=network-online.target
+# Đảm bảo thẻ nhớ microSD đã mount xong trước khi chạy (tránh lỗi race condition sau mất điện)
+RequiresMountsFor=/mnt/storage
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/insta-downloader
+ExecStart=/opt/insta-downloader/venv/bin/python3 /opt/insta-downloader/main.py
+Restart=always
+RestartSec=10
+Environment=PYTHONUNBUFFERED=1
+
+# Giới hạn tài nguyên an toàn cho SoC Amlogic S905W (tránh tranh chấp RAM với AdGuard/Kuma)
+Nice=10
+MemoryMax=150M
+
+[Install]
+WantedBy=multi-user.target
