@@ -45,6 +45,11 @@ export const PhotoViewer: React.FC<PhotoViewerProps> = ({
   const [position, setPosition] = useState({ x: 0, y: 0 });
   const [isGesturing, setIsGesturing] = useState(false);
 
+  // Swipe left/right state
+  const [swipeOffset, setSwipeOffset] = useState(0);
+  const swipeStartRef = useRef<{ x: number; y: number; time: number }>({ x: 0, y: 0, time: 0 });
+  const isSwipeGestureRef = useRef<boolean>(false);
+
   const containerRef = useRef<HTMLDivElement>(null);
   const touchStartRef = useRef<{ dist: number; scale: number; x: number; y: number; touches: number }>({
     dist: 0,
@@ -66,6 +71,8 @@ export const PhotoViewer: React.FC<PhotoViewerProps> = ({
   useEffect(() => {
     setScale(1);
     setPosition({ x: 0, y: 0 });
+    setSwipeOffset(0);
+    isSwipeGestureRef.current = false;
     let active = true;
     setHdUrl(null);
     if (!photo) return;
@@ -110,7 +117,7 @@ export const PhotoViewer: React.FC<PhotoViewerProps> = ({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [currentIndex, hasPrev, hasNext]);
 
-  // Touch Handlers for Pinch to Zoom & Pan
+  // Touch Handlers for Pinch to Zoom, Pan & Swipe Left/Right
   const handleTouchStart = (e: React.TouchEvent) => {
     if (e.touches.length === 2) {
       // 2 fingers: Pinch to zoom
@@ -127,16 +134,19 @@ export const PhotoViewer: React.FC<PhotoViewerProps> = ({
         touches: 2,
       };
     } else if (e.touches.length === 1) {
-      // 1 finger: Check for double tap or pan
       const now = Date.now();
+      const touch = e.touches[0];
+
+      // Double tap: toggle zoom 1x <-> 2.5x
       if (now - lastTapRef.current < 300) {
-        // Double tap: toggle zoom 1x <-> 2.5x
         if (scale > 1.1) {
           setScale(1);
           setPosition({ x: 0, y: 0 });
+          setSwipeOffset(0);
         } else {
           setScale(2.5);
           setPosition({ x: 0, y: 0 });
+          setSwipeOffset(0);
         }
         lastTapRef.current = 0;
         return;
@@ -144,14 +154,23 @@ export const PhotoViewer: React.FC<PhotoViewerProps> = ({
       lastTapRef.current = now;
 
       if (scale > 1) {
+        // Panning when zoomed in
         setIsGesturing(true);
         touchStartRef.current = {
           dist: 0,
           scale,
-          x: e.touches[0].clientX - position.x,
-          y: e.touches[0].clientY - position.y,
+          x: touch.clientX - position.x,
+          y: touch.clientY - position.y,
           touches: 1,
         };
+      } else {
+        // Normal 1x: Prepare for horizontal swipe between photos
+        swipeStartRef.current = {
+          x: touch.clientX,
+          y: touch.clientY,
+          time: now,
+        };
+        isSwipeGestureRef.current = false;
       }
     }
   };
@@ -177,14 +196,62 @@ export const PhotoViewer: React.FC<PhotoViewerProps> = ({
         x: Math.min(Math.max(newX, -maxOffset), maxOffset),
         y: Math.min(Math.max(newY, -maxOffset * 1.5), maxOffset * 1.5),
       });
+    } else if (e.touches.length === 1 && scale === 1) {
+      const touch = e.touches[0];
+      const deltaX = touch.clientX - swipeStartRef.current.x;
+      const deltaY = touch.clientY - swipeStartRef.current.y;
+
+      // Determine if gesture is horizontal swipe
+      if (!isSwipeGestureRef.current) {
+        if (Math.abs(deltaX) > 8 && Math.abs(deltaX) > Math.abs(deltaY) * 1.1) {
+          isSwipeGestureRef.current = true;
+          setIsGesturing(true);
+        }
+      }
+
+      if (isSwipeGestureRef.current) {
+        e.preventDefault();
+        // Rubber-band resistance at start and end
+        let effectiveOffset = deltaX;
+        if (!hasPrev && deltaX > 0) {
+          effectiveOffset = deltaX * 0.3;
+        } else if (!hasNext && deltaX < 0) {
+          effectiveOffset = deltaX * 0.3;
+        }
+        setSwipeOffset(effectiveOffset);
+      }
     }
   };
 
   const handleTouchEnd = () => {
     setIsGesturing(false);
+
     if (scale < 1.05) {
       setScale(1);
       setPosition({ x: 0, y: 0 });
+    }
+
+    if (isSwipeGestureRef.current) {
+      isSwipeGestureRef.current = false;
+      const duration = Date.now() - swipeStartRef.current.time;
+      const velocity = Math.abs(swipeOffset) / Math.max(duration, 1);
+
+      const isQuickFlick = Math.abs(swipeOffset) > 20 && velocity > 0.35;
+      const isDragPassed = Math.abs(swipeOffset) > 50;
+
+      if (swipeOffset < 0 && (isDragPassed || isQuickFlick)) {
+        // Vuốt sang trái -> Xem ảnh tiếp theo
+        if (hasNext) {
+          handleNext();
+        }
+      } else if (swipeOffset > 0 && (isDragPassed || isQuickFlick)) {
+        // Vuốt sang phải -> Xem ảnh trước đó
+        if (hasPrev) {
+          handlePrev();
+        }
+      }
+
+      setSwipeOffset(0);
     }
   };
 
@@ -308,11 +375,8 @@ export const PhotoViewer: React.FC<PhotoViewerProps> = ({
               year: "numeric",
             })}
           </p>
-          <p className="text-xs text-neutral-400">
-            {photo.date.toLocaleTimeString("vi-VN", {
-              hour: "2-digit",
-              minute: "2-digit",
-            })}
+          <p className="text-xs text-neutral-400 font-medium">
+            {currentIndex + 1} / {allPhotos.length}
           </p>
         </div>
 
@@ -340,8 +404,8 @@ export const PhotoViewer: React.FC<PhotoViewerProps> = ({
           src={hdUrl || photo.url}
           alt={photo.caption || "Fullscreen view"}
           style={{
-            transform: `scale(${scale}) translate(${position.x / scale}px, ${position.y / scale}px)`,
-            transition: isGesturing ? "none" : "transform 0.2s cubic-bezier(0.2, 0, 0, 1)",
+            transform: `scale(${scale}) translate(${(position.x + swipeOffset) / scale}px, ${position.y / scale}px)`,
+            transition: isGesturing ? "none" : "transform 0.25s cubic-bezier(0.2, 0, 0, 1)",
             WebkitTouchCallout: "default",
           }}
           className="max-w-full max-h-full object-contain pointer-events-auto select-none"
@@ -361,19 +425,31 @@ export const PhotoViewer: React.FC<PhotoViewerProps> = ({
           </div>
         )}
 
-        {/* Navigation Arrows for Desktop / Tablet */}
+        {/* Navigation Arrows for Mobile & Desktop */}
         {hasPrev && scale === 1 && (
           <button
-            onClick={handlePrev}
-            className="absolute left-3 p-3 rounded-full bg-black/40 text-white hover:bg-black/70 backdrop-blur-sm z-10 transition-colors hidden sm:flex"
+            onClick={(e) => {
+              e.stopPropagation();
+              handlePrev();
+            }}
+            className={`absolute left-3 w-10 h-10 rounded-full bg-black/50 border border-neutral-700/60 text-white active:scale-90 backdrop-blur-md z-10 transition-all flex items-center justify-center ${
+              uiVisible ? "opacity-100" : "opacity-0 pointer-events-none"
+            }`}
+            title="Ảnh trước"
           >
             <ChevronLeft className="w-6 h-6" />
           </button>
         )}
         {hasNext && scale === 1 && (
           <button
-            onClick={handleNext}
-            className="absolute right-3 p-3 rounded-full bg-black/40 text-white hover:bg-black/70 backdrop-blur-sm z-10 transition-colors hidden sm:flex"
+            onClick={(e) => {
+              e.stopPropagation();
+              handleNext();
+            }}
+            className={`absolute right-3 w-10 h-10 rounded-full bg-black/50 border border-neutral-700/60 text-white active:scale-90 backdrop-blur-md z-10 transition-all flex items-center justify-center ${
+              uiVisible ? "opacity-100" : "opacity-0 pointer-events-none"
+            }`}
+            title="Ảnh tiếp theo"
           >
             <ChevronRight className="w-6 h-6" />
           </button>
