@@ -10,7 +10,9 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@capacitor/app": "^8.1.2",
     "@capacitor/cli": "^8.6.0",
+    "@capacitor/clipboard": "^8.0.1",
     "@capacitor/core": "^8.6.0",
     "@capacitor/ios": "^8.6.0",
     "@capacitor/share": "^8.0.3",

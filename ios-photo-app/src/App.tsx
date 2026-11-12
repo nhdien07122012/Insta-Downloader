@@ -10,6 +10,9 @@ import { PhotoGrid } from "./components/PhotoGrid";
 import { PhotoViewer } from "./components/PhotoViewer";
 import { TabBar } from "./components/TabBar";
 import { SettingsModal } from "./components/SettingsModal";
+import { AddPhotoModal } from "./components/AddPhotoModal";
+import { App as CapApp } from "@capacitor/app";
+import { Clipboard } from "@capacitor/clipboard";
 import {
   RefreshCw,
   Search,
@@ -24,6 +27,7 @@ import {
   ChevronLeft,
   User,
   Calendar,
+  Plus,
 } from "lucide-react";
 
 export const App: React.FC = () => {
@@ -37,6 +41,42 @@ export const App: React.FC = () => {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedAlbum, setSelectedAlbum] = useState<PostAlbum | null>(null);
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [addUrl, setAddUrl] = useState("");
+  const [clipboardPrompt, setClipboardPrompt] = useState<string | null>(null);
+
+  // Lắng nghe Deep Link & Kiểm tra Clipboard
+  useEffect(() => {
+    try {
+      CapApp.addListener("appUrlOpen", (data) => {
+        if (data.url && data.url.includes("url=")) {
+          const rawUrl = data.url.split("url=")[1];
+          const decoded = decodeURIComponent(rawUrl);
+          setAddUrl(decoded);
+          setIsAddModalOpen(true);
+        }
+      });
+    } catch {}
+
+    const checkClipboard = async () => {
+      try {
+        const { value } = await Clipboard.read();
+        if (
+          value &&
+          (value.includes("instagram.com/p/") ||
+            value.includes("instagram.com/reel/") ||
+            value.includes("instagram.com/share/"))
+        ) {
+          const lastProcessed = localStorage.getItem("last_clipboard_insta");
+          if (lastProcessed !== value.trim()) {
+            setClipboardPrompt(value.trim());
+          }
+        }
+      } catch {}
+    };
+
+    checkClipboard();
+  }, []);
 
   // Danh sách ảnh yêu thích lưu trong LocalStorage
   const [favorites, setFavorites] = useState<Set<string>>(() => {
@@ -224,6 +264,41 @@ export const App: React.FC = () => {
 
       {/* Main Content Area */}
       <main className="max-w-md mx-auto min-h-[calc(100vh-140px)]">
+        {/* Banner Phát hiện link Instagram từ Clipboard */}
+        {clipboardPrompt && (
+          <div className="mx-4 mt-3 mb-2 p-3.5 bg-gradient-to-r from-purple-950/90 via-pink-950/90 to-neutral-900 border border-pink-500/40 rounded-2xl flex items-center justify-between shadow-xl animate-in slide-in-from-top duration-300">
+            <div className="flex-1 min-w-0 mr-3">
+              <div className="flex items-center gap-1.5 text-xs font-bold text-white mb-0.5">
+                <Sparkles className="w-3.5 h-3.5 text-pink-400" />
+                <span>Phát hiện liên kết Instagram</span>
+              </div>
+              <p className="text-[11px] text-pink-200 truncate">{clipboardPrompt}</p>
+            </div>
+            <div className="flex items-center gap-1.5 shrink-0">
+              <button
+                onClick={() => {
+                  localStorage.setItem("last_clipboard_insta", clipboardPrompt);
+                  setClipboardPrompt(null);
+                }}
+                className="text-[11px] text-neutral-400 px-2 py-1.5 hover:text-white active:opacity-60"
+              >
+                Bỏ qua
+              </button>
+              <button
+                onClick={() => {
+                  localStorage.setItem("last_clipboard_insta", clipboardPrompt);
+                  setAddUrl(clipboardPrompt);
+                  setClipboardPrompt(null);
+                  setIsAddModalOpen(true);
+                }}
+                className="text-xs font-semibold bg-white text-purple-950 px-3 py-1.5 rounded-xl active:bg-neutral-200 shadow"
+              >
+                Tải ngay
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Banner Chưa đăng nhập Telegram */}
         {!config.isLoggedIn && (
           <div
@@ -584,18 +659,42 @@ export const App: React.FC = () => {
         )}
       </main>
 
-      {/* Floating Reload Button */}
-      <button
-        onClick={loadPhotos}
-        disabled={loading}
-        className="fixed right-4 bottom-20 z-20 w-11 h-11 rounded-full bg-blue-600 active:bg-blue-700 text-white shadow-lg shadow-blue-600/30 flex items-center justify-center transition-transform active:scale-95"
-        title="Làm mới ảnh"
-      >
-        <RefreshCw className={`w-5 h-5 ${loading ? "animate-spin" : ""}`} />
-      </button>
+      {/* Floating Action Buttons */}
+      <div className="fixed right-4 bottom-20 z-20 flex flex-col gap-2.5 items-end">
+        {/* Nút Thêm link Instagram */}
+        <button
+          onClick={() => {
+            setAddUrl("");
+            setIsAddModalOpen(true);
+          }}
+          className="w-12 h-12 rounded-full bg-gradient-to-tr from-yellow-400 via-pink-500 to-purple-600 text-white shadow-xl shadow-pink-600/30 flex items-center justify-center transition-transform active:scale-90"
+          title="Tải ảnh mới từ Instagram"
+        >
+          <Plus className="w-6 h-6 stroke-[2.5]" />
+        </button>
+
+        {/* Nút Làm mới thư viện */}
+        <button
+          onClick={loadPhotos}
+          disabled={loading}
+          className="w-10 h-10 rounded-full bg-neutral-900/90 backdrop-blur-md border border-neutral-700/80 active:bg-neutral-800 text-neutral-200 shadow-lg flex items-center justify-center transition-transform active:scale-90"
+          title="Làm mới ảnh"
+        >
+          <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin text-blue-400" : ""}`} />
+        </button>
+      </div>
 
       {/* iOS Bottom TabBar */}
       <TabBar currentTab={currentTab} onTabChange={setCurrentTab} />
+
+      {/* Modal Tải Ảnh Từ Instagram */}
+      <AddPhotoModal
+        isOpen={isAddModalOpen}
+        onClose={() => setIsAddModalOpen(false)}
+        config={config}
+        initialUrl={addUrl}
+        onSuccess={loadPhotos}
+      />
 
       {/* Fullscreen Photo Viewer Modal */}
       {selectedPhoto && (

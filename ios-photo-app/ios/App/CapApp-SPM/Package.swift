@@ -12,6 +12,8 @@ let package = Package(
     ],
     dependencies: [
         .package(url: "https://github.com/ionic-team/capacitor-swift-pm.git", exact: "8.6.0"),
+        .package(name: "CapacitorApp", path: "../../../../../../VSCODE-DELL/Insta-Downloader/ios-photo-app/node_modules/@capacitor/app"),
+        .package(name: "CapacitorClipboard", path: "../../../../../../VSCODE-DELL/Insta-Downloader/ios-photo-app/node_modules/@capacitor/clipboard"),
         .package(name: "CapacitorShare", path: "../../../../../../VSCODE-DELL/Insta-Downloader/ios-photo-app/node_modules/@capacitor/share")
     ],
     targets: [
@@ -20,6 +22,8 @@ let package = Package(
             dependencies: [
                 .product(name: "Capacitor", package: "capacitor-swift-pm"),
                 .product(name: "Cordova", package: "capacitor-swift-pm"),
+                .product(name: "CapacitorApp", package: "CapacitorApp"),
+                .product(name: "CapacitorClipboard", package: "CapacitorClipboard"),
                 .product(name: "CapacitorShare", package: "CapacitorShare")
             ]
         )

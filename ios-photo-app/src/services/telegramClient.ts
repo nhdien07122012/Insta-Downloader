@@ -385,3 +385,26 @@ export async function fetchFullResolutionPhoto(
   }
   return null;
 }
+
+/**
+ * Gửi liên kết Instagram đến Kênh lưu trữ qua Telegram MTProto
+ */
+export async function sendInstagramLinkToChannel(
+  config: TelegramConfig,
+  url: string
+): Promise<boolean> {
+  const client = await initTelegramClient(config);
+  let targetPeer: any = config.channelId;
+  try {
+    targetPeer = await client.getEntity(config.channelId);
+  } catch {
+    try {
+      targetPeer = await client.getEntity(BigInt(config.channelId));
+    } catch {
+      targetPeer = config.channelId;
+    }
+  }
+
+  await client.sendMessage(targetPeer, { message: url.trim() });
+  return true;
+}
