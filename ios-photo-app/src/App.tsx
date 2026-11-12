@@ -4,8 +4,12 @@ import {
   getStoredConfig,
   saveStoredConfig,
   fetchChannelPhotos,
+  deleteTelegramPhoto,
 } from "./services/telegramClient";
-import { getCachedPhotosFromDB } from "./services/photoStorage";
+import {
+  getCachedPhotosFromDB,
+  removePhotoFromCache,
+} from "./services/photoStorage";
 import { Header } from "./components/Header";
 import { PhotoGrid } from "./components/PhotoGrid";
 import { PhotoViewer } from "./components/PhotoViewer";
@@ -795,6 +799,11 @@ export const App: React.FC = () => {
           onToggleFavorite={toggleFavorite}
           onClose={() => setSelectedPhoto(null)}
           onSelectPhoto={(p) => setSelectedPhoto(p)}
+          onDeletePhoto={async (messageId) => {
+            await removePhotoFromCache(messageId);
+            setPhotos((prev) => prev.filter((p) => p.messageId !== messageId));
+            await deleteTelegramPhoto(config, messageId);
+          }}
         />
       )}
 

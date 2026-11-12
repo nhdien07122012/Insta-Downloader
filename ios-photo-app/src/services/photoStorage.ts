@@ -253,6 +253,36 @@ export async function getCacheStats(): Promise<{ count: number; sizeMB: string }
 }
 
 /**
+ * Xóa 1 ảnh cụ thể khỏi IndexedDB và giải phóng bộ nhớ
+ */
+export async function removePhotoFromCache(messageId: number): Promise<void> {
+  const objUrl = objectUrlMap.get(messageId);
+  if (objUrl) {
+    URL.revokeObjectURL(objUrl);
+    objectUrlMap.delete(messageId);
+  }
+  const hdUrl = hdUrlMap.get(messageId);
+  if (hdUrl) {
+    URL.revokeObjectURL(hdUrl);
+    hdUrlMap.delete(messageId);
+  }
+
+  try {
+    const db = await openDatabase();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(STORE_NAME, "readwrite");
+      const store = tx.objectStore(STORE_NAME);
+      const request = store.delete(messageId);
+
+      request.onsuccess = () => resolve();
+      request.onerror = () => reject(request.error);
+    });
+  } catch (e) {
+    console.warn(`Lỗi xóa ảnh ${messageId} khỏi IndexedDB:`, e);
+  }
+}
+
+/**
  * Xóa toàn bộ bộ nhớ đệm ảnh
  */
 export async function clearPhotoCache(): Promise<void> {

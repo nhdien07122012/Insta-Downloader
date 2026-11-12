@@ -4,6 +4,24 @@ Toàn bộ các phiên bản cập nhật, mã bản dựng (build number), chi 
 
 ---
 
+## [v1.3 (Build 5)] - 2026-11-12
+- **Commit SHA**: *(Commit hiện tại)*
+- **Mục tiêu**: Bổ sung tính năng xóa ảnh trực tiếp trong ứng dụng đồng bộ 2 chiều (vừa xóa khỏi bộ nhớ máy IndexedDB, vừa gửi lệnh xóa vĩnh viễn tin nhắn trên Kênh Telegram qua MTProto/Bot API) kèm hộp thoại xác nhận an toàn kiểu Action Sheet chuẩn Apple Photos.
+- **Chi tiết thay đổi**:
+  - `ios-photo-app/src/services/photoStorage.ts`: Bổ sung hàm `removePhotoFromCache(messageId)` xóa record trong IndexedDB và giải phóng ObjectURL bộ nhớ.
+  - `ios-photo-app/src/services/telegramClient.ts`: Bổ sung hàm `deleteTelegramPhoto(config, messageId)` xóa tin nhắn vĩnh viễn trên Kênh Telegram qua MTProto Client với fallback sang Bot API.
+  - `ios-photo-app/src/components/PhotoViewer.tsx`: Thêm nút Thùng rác (Trash2) ở thanh công cụ đáy, hộp thoại xác nhận Action Sheet chuẩn iOS, hiệu ứng loading xoay tròn khi đang xóa và tự động trượt mượt sang ảnh kế tiếp.
+  - `ios-photo-app/src/App.tsx`: Kết nối sự kiện `onDeletePhoto` giữa PhotoViewer, IndexedDB và Telegram Client, tự động cập nhật danh sách ảnh tức thì.
+  - `ios-photo-app/ios/App/App.xcodeproj/project.pbxproj`: Cập nhật `CURRENT_PROJECT_VERSION = 5;` và `MARKETING_VERSION = 1.3;`.
+  - `ios-photo-app/package.json`: Nâng phiên bản lên `"1.3.0"`.
+  - `ios-photo-app/src/components/SettingsModal.tsx`: Cập nhật footer thành `InstaPhotos v1.3 • Build 5`.
+- **Lệnh hoàn tác mẫu (Rollback)**:
+  ```bash
+  git revert HEAD --no-edit
+  ```
+
+---
+
 ## [v1.2 (Build 4)] - 2026-11-12
 - **Commit SHA**: `ad1db78`
 - **Mục tiêu**: Xây dựng kiến trúc Offline-First lưu trữ bộ nhớ đệm ảnh vĩnh viễn (IndexedDB Persistent Cache), giúp mở app hiển thị ảnh ngay lập tức (<50ms), đồng bộ ngầm chỉ tải ảnh mới từ Telegram và thêm nút dọn dẹp cache trong Cài đặt.

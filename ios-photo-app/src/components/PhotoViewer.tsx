@@ -11,6 +11,7 @@ import {
   ChevronRight,
   RefreshCw,
   Sparkles,
+  Trash2,
 } from "lucide-react";
 import { Share } from "@capacitor/share";
 import { fetchFullResolutionPhoto } from "../services/telegramClient";
@@ -23,6 +24,7 @@ interface PhotoViewerProps {
   onToggleFavorite: (id: string) => void;
   onClose: () => void;
   onSelectPhoto: (p: PhotoItem) => void;
+  onDeletePhoto?: (messageId: number) => Promise<void>;
 }
 
 export const PhotoViewer: React.FC<PhotoViewerProps> = ({
@@ -33,12 +35,15 @@ export const PhotoViewer: React.FC<PhotoViewerProps> = ({
   onToggleFavorite,
   onClose,
   onSelectPhoto,
+  onDeletePhoto,
 }) => {
   const [showInfo, setShowInfo] = useState(false);
   const [uiVisible, setUiVisible] = useState(true);
   const [hdUrl, setHdUrl] = useState<string | null>(null);
   const [loadingHd, setLoadingHd] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+  const [isConfirmDeleteOpen, setIsConfirmDeleteOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // Zoom & Pan state
   const [scale, setScale] = useState(1);
@@ -496,6 +501,20 @@ export const PhotoViewer: React.FC<PhotoViewerProps> = ({
         >
           <Download className="w-6 h-6" />
         </button>
+
+        {/* Nút Xóa ảnh (Thùng rác chuẩn iOS) */}
+        {onDeletePhoto && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              setIsConfirmDeleteOpen(true);
+            }}
+            className="p-2 text-neutral-400 hover:text-red-400 active:text-red-500 transition-colors"
+            title="Xóa ảnh khỏi kho lưu trữ"
+          >
+            <Trash2 className="w-6 h-6" />
+          </button>
+        )}
       </div>
 
       {/* Info Bottom Sheet */}
@@ -564,6 +583,80 @@ export const PhotoViewer: React.FC<PhotoViewerProps> = ({
                 </a>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* iOS Style Action Sheet Xác Nhận Xóa Ảnh */}
+      {isConfirmDeleteOpen && (
+        <div
+          onClick={(e) => {
+            e.stopPropagation();
+            if (!isDeleting) setIsConfirmDeleteOpen(false);
+          }}
+          className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-end sm:items-center justify-center p-4 animate-in fade-in duration-200"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-sm bg-[#1c1c1e] border border-neutral-800 rounded-2xl overflow-hidden text-center shadow-2xl p-4 space-y-3 animate-in zoom-in-95 duration-200"
+          >
+            <div>
+              <h4 className="text-base font-bold text-white">Xóa ảnh này?</h4>
+              <p className="text-xs text-neutral-400 mt-1 leading-relaxed px-2">
+                Ảnh sẽ bị xóa khỏi bộ nhớ máy và xóa vĩnh viễn trên Kênh Telegram của bạn.
+              </p>
+            </div>
+
+            <div className="pt-2 space-y-2">
+              <button
+                type="button"
+                disabled={isDeleting}
+                onClick={async () => {
+                  if (!onDeletePhoto || !photo) return;
+                  setIsDeleting(true);
+                  try {
+                    const nextTarget = hasNext
+                      ? allPhotos[currentIndex + 1]
+                      : hasPrev
+                      ? allPhotos[currentIndex - 1]
+                      : null;
+
+                    await onDeletePhoto(photo.messageId);
+                    showToast("Đã xóa ảnh thành công 🗑️");
+                    setIsConfirmDeleteOpen(false);
+
+                    if (nextTarget) {
+                      onSelectPhoto(nextTarget);
+                    } else {
+                      onClose();
+                    }
+                  } catch (err: any) {
+                    showToast("Lỗi khi xóa ảnh: " + (err.message || "Thử lại sau"));
+                  } finally {
+                    setIsDeleting(false);
+                  }
+                }}
+                className="w-full py-3 bg-red-600 text-white font-bold rounded-xl text-sm flex items-center justify-center gap-2 active:bg-red-700 transition-colors disabled:opacity-50"
+              >
+                {isDeleting ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                    <span>Đang xóa...</span>
+                  </>
+                ) : (
+                  "Xóa ảnh"
+                )}
+              </button>
+
+              <button
+                type="button"
+                disabled={isDeleting}
+                onClick={() => setIsConfirmDeleteOpen(false)}
+                className="w-full py-3 bg-neutral-800 text-white font-semibold rounded-xl text-sm active:bg-neutral-700 transition-colors"
+              >
+                Hủy
+              </button>
+            </div>
           </div>
         </div>
       )}
