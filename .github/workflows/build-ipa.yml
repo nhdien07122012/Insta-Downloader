@@ -53,6 +53,9 @@ jobs:
           cd ios-photo-app/ios/App
           mkdir -p Payload
           cp -r derived_data/Build/Products/Release-iphoneos/App.app Payload/App.app
+          cp App/Assets.xcassets/AppIcon.appiconset/*.png Payload/App.app/ || true
+          cp App/AppIcon*.png Payload/App.app/ || true
+          cp App/iTunesArtwork*.png Payload/App.app/ || true
           zip -qr InstaPhotos.ipa Payload
           echo "=== IPA File Created ==="
           ls -lh InstaPhotos.ipa

@@ -273,6 +273,7 @@ export const App: React.FC = () => {
         <PhotoViewer
           photo={selectedPhoto}
           allPhotos={filteredPhotos}
+          config={config}
           onClose={() => setSelectedPhoto(null)}
           onSelectPhoto={(p) => setSelectedPhoto(p)}
         />

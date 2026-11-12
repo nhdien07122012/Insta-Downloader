@@ -308,8 +308,8 @@ export async function fetchChannelPhotos(
         let photoUrl = mediaCache.get(msg.id);
         if (!photoUrl) {
           try {
-            // Tải thumbnail cỡ vừa (thumb: 1) siêu nhanh để hiển thị ngay tức thì
-            const buffer = await client.downloadMedia(msg.media, { thumb: 1 });
+            // Tải thumbnail sắc nét (thumb: 2 ~800px) cho Retina màn hình iPhone
+            const buffer = await client.downloadMedia(msg.media, { thumb: 2 });
             if (buffer) {
               const blob = new Blob([buffer], { type: "image/jpeg" });
               photoUrl = URL.createObjectURL(blob);
@@ -341,4 +341,43 @@ export async function fetchChannelPhotos(
     console.error("Lỗi kết nối Telegram MTProto:", error);
     throw error;
   }
+}
+
+const fullResolutionCache = new Map<number, string>();
+
+/**
+ * Tải ảnh gốc độ phân giải cao nhất (HD Full Resolution) từ Telegram CDN
+ */
+export async function fetchFullResolutionPhoto(
+  config: TelegramConfig,
+  messageId: number
+): Promise<string | null> {
+  if (fullResolutionCache.has(messageId)) {
+    return fullResolutionCache.get(messageId)!;
+  }
+
+  try {
+    const client = await initTelegramClient(config);
+    let targetPeer: any = config.channelId;
+    try {
+      targetPeer = await client.getEntity(config.channelId);
+    } catch {
+      targetPeer = config.channelId;
+    }
+
+    const messages = await client.getMessages(targetPeer, { ids: [messageId] });
+    if (messages && messages[0] && messages[0].media) {
+      // Tải ảnh nguyên bản không nén (100% gốc HD/4K)
+      const buffer = await client.downloadMedia(messages[0].media);
+      if (buffer) {
+        const blob = new Blob([buffer], { type: "image/jpeg" });
+        const hdUrl = URL.createObjectURL(blob);
+        fullResolutionCache.set(messageId, hdUrl);
+        return hdUrl;
+      }
+    }
+  } catch (err) {
+    console.warn(`Lỗi tải ảnh gốc tin nhắn ${messageId}:`, err);
+  }
+  return null;
 }

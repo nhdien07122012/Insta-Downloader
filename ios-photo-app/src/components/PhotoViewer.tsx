@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import type { PhotoItem } from "../types";
+import type { PhotoItem, TelegramConfig } from "../types";
 import {
   ChevronLeft,
   Share2,
@@ -9,11 +9,15 @@ import {
   ExternalLink,
   X,
   ChevronRight,
+  RefreshCw,
+  Sparkles,
 } from "lucide-react";
+import { fetchFullResolutionPhoto } from "../services/telegramClient";
 
 interface PhotoViewerProps {
   photo: PhotoItem | null;
   allPhotos: PhotoItem[];
+  config: TelegramConfig;
   onClose: () => void;
   onSelectPhoto: (p: PhotoItem) => void;
 }
@@ -21,12 +25,33 @@ interface PhotoViewerProps {
 export const PhotoViewer: React.FC<PhotoViewerProps> = ({
   photo,
   allPhotos,
+  config,
   onClose,
   onSelectPhoto,
 }) => {
   const [showInfo, setShowInfo] = useState(false);
   const [isLiked, setIsLiked] = useState(false);
   const [uiVisible, setUiVisible] = useState(true);
+  const [hdUrl, setHdUrl] = useState<string | null>(null);
+  const [loadingHd, setLoadingHd] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    setHdUrl(null);
+    if (!photo) return;
+
+    setLoadingHd(true);
+    fetchFullResolutionPhoto(config, photo.messageId).then((url) => {
+      if (active && url) {
+        setHdUrl(url);
+      }
+      if (active) setLoadingHd(false);
+    });
+
+    return () => {
+      active = false;
+    };
+  }, [photo?.id, photo?.messageId]);
 
   if (!photo) return null;
 
@@ -60,7 +85,7 @@ export const PhotoViewer: React.FC<PhotoViewerProps> = ({
     e.stopPropagation();
     try {
       const a = document.createElement("a");
-      a.href = photo.url;
+      a.href = hdUrl || photo.url;
       a.download = `instagram_${photo.author || "photo"}_${Date.now()}.jpg`;
       document.body.appendChild(a);
       a.click();
@@ -78,7 +103,7 @@ export const PhotoViewer: React.FC<PhotoViewerProps> = ({
         await navigator.share({
           title: `Ảnh từ @${photo.author || "Instagram"}`,
           text: photo.caption,
-          url: photo.originalUrl || photo.url,
+          url: photo.originalUrl || hdUrl || photo.url,
         });
       } catch (err) {
         // user cancelled
@@ -132,10 +157,24 @@ export const PhotoViewer: React.FC<PhotoViewerProps> = ({
         className="relative flex-1 flex items-center justify-center overflow-hidden cursor-pointer"
       >
         <img
-          src={photo.url}
+          src={hdUrl || photo.url}
           alt={photo.caption || "Fullscreen view"}
           className="max-w-full max-h-full object-contain pointer-events-auto"
         />
+
+        {loadingHd && (
+          <div className="absolute top-24 right-4 bg-black/60 border border-neutral-700/60 backdrop-blur-md px-3 py-1.5 rounded-full flex items-center gap-2 text-xs text-neutral-300 pointer-events-none">
+            <RefreshCw className="w-3.5 h-3.5 animate-spin text-blue-400" />
+            <span>Đang tải HD...</span>
+          </div>
+        )}
+
+        {hdUrl && (
+          <div className="absolute top-24 right-4 bg-emerald-950/70 border border-emerald-500/40 backdrop-blur-md px-2.5 py-1 rounded-full flex items-center gap-1.5 text-[11px] text-emerald-300 pointer-events-none">
+            <Sparkles className="w-3 h-3 text-emerald-400" />
+            <span>HD Cực nét</span>
+          </div>
+        )}
 
         {/* Navigation Arrows for Desktop / Tablet */}
         {hasPrev && (
