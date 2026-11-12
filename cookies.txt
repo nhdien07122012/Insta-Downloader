@@ -1,11 +1,11 @@
 # Netscape HTTP Cookie File
 
-.instagram.com	TRUE	/	TRUE	1829013236	csrftoken	1a283339ba053ad4f88bcecf7e19f91c
-.instagram.com	TRUE	/	TRUE	1802229236	ds_user_id	71674509323
+.instagram.com	TRUE	/	TRUE	1829014593	csrftoken	2f2abc299b9413c9c7b0b6d3ad8fcb82
+.instagram.com	TRUE	/	TRUE	1802230593	ds_user_id	71674509323
 .instagram.com	TRUE	/	TRUE	1817863462	ig_did	61190B14-92DB-47CB-8CD2-5E26A4708EA6
 .instagram.com	TRUE	/	TRUE	1823914264	mid	aqdhFAALAAHQfeR4rJGHRRF-QnPq
 .instagram.com	TRUE	/	TRUE	1827287010	ps_l	1
 .instagram.com	TRUE	/	TRUE	1827287010	ps_n	1
 .instagram.com	TRUE	/	TRUE	1795057149	dpr	1.25
 .instagram.com	TRUE	/	TRUE	1825986481	sessionid	71674509323%3ArGCau3yklmLgHy%3A27%3AAYmeYp9LpqTBV3A7sF0dbnfy7ZBwybnTQ0mTewPwf7lS
-.instagram.com	TRUE	/	TRUE	0	rur	"SNB\05471674509323\0541825989249:01ffc7f13f957a8376928609d85fcb5fc310c01916bea7a6465819bfbf8b69ece528d930"
+.instagram.com	TRUE	/	TRUE	0	rur	"TTX\05471674509323\0541825990591:01ff2c6a75fe4b9d193d9384e20efaea7a558a4fe2fd014341420383971ddc7acc7aacc4"

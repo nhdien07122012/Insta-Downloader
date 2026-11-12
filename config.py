@@ -33,6 +33,9 @@ COOKIES_FILE = os.getenv("COOKIES_FILE", str(BASE_DIR / "cookies.txt")).strip()
 # RapidAPI (optional fallback)
 RAPIDAPI_KEY = os.getenv("RAPIDAPI_KEY", "").strip()
 
+# Tùy chọn tự động xóa tin nhắn chứa link sau khi lưu thành công (mặc định: bật)
+DELETE_LINK_MESSAGE = os.getenv("DELETE_LINK_MESSAGE", "true").strip().lower() in ["true", "1", "yes"]
+
 # Storage & DB Config
 DATABASE_PATH = os.getenv("DATABASE_PATH", str(BASE_DIR / "insta_storage.db")).strip()
 DOWNLOAD_DIR = Path(os.getenv("TEMP_DOWNLOAD_DIR", str(BASE_DIR / "downloads")))

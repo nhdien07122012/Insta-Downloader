@@ -22,6 +22,7 @@ from config import (
     TELEGRAM_BOT_TOKEN,
     TELEGRAM_STORAGE_CHANNEL_ID,
     COOKIES_FILE,
+    DELETE_LINK_MESSAGE,
     is_user_allowed,
 )
 import database
@@ -320,15 +321,20 @@ async def handle_instagram_message(update: Update, context: ContextTypes.DEFAULT
         )
         await database.save_media_items(post_id, saved_media_records)
 
-        # 6. Phản hồi
-        # Nếu gửi trong kênh: Xóa tin nhắn link thô để kênh chỉ còn album ảnh đẹp
-        if is_channel:
+        # 6. Phản hồi và Dọn dẹp tin nhắn chứa link
+        # Xóa tin nhắn link thô để Kênh lưu trữ luôn sạch đẹp, chỉ hiển thị Album ảnh
+        if is_channel or DELETE_LINK_MESSAGE:
             try:
                 await msg.delete()
+                logger.info(f"🗑️ Đã xóa tin nhắn link gốc (ID: {msg.message_id})")
             except Exception as e:
-                logger.warning(f"Không thể xóa tin nhắn link trong kênh: {e}")
+                logger.warning(
+                    f"⚠️ Không thể xóa tin nhắn link: {e}. "
+                    "Hãy đảm bảo Bot được bật quyền 'Delete messages' (Xóa tin nhắn) trong cài đặt Admin của Kênh!"
+                )
+
         # Nếu gửi trong chat riêng: Cập nhật status_msg kèm nút bấm
-        elif status_msg:
+        if status_msg:
             channel_link = format_channel_post_link(destination_chat_id, primary_message_id)
             keyboard = [
                 [InlineKeyboardButton("📸 Mở bài gốc Instagram", url=download_result["url"])]
