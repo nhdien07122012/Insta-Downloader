@@ -5,7 +5,7 @@ Toàn bộ các phiên bản cập nhật, mã bản dựng (build number), chi 
 ---
 
 ## [v1.4.4 (Build 10)] - 2026-11-13
-- **Commit SHA**: `0f47f8e`
+- **Commit SHA**: `794283a`
 - **Mục tiêu**: Nâng cấp toàn diện cơ chế tải và phát video cho cả **Twitter (X)** và **Instagram (Reels / Video)**, hỗ trợ bóc tách video MP4 chất lượng cao nhất (`formats` container mp4, direct redirect `d.fxtwitter.com`), bổ sung phương pháp dự phòng Instaloader cho Instagram và kích hoạt cờ `supports_streaming=True` khi đẩy video lên Telegram.
 - **Chi tiết thay đổi**:
   - `instagram.py`:
