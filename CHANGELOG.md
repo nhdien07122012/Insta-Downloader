@@ -5,7 +5,7 @@ Toàn bộ các phiên bản cập nhật, mã bản dựng (build number), chi 
 ---
 
 ## [v2.0 (Build 6)] - 2026-11-13
-- **Commit SHA**: *Sẽ cập nhật sau khi commit*
+- **Commit SHA**: `e66e0d5`
 - **Mục tiêu**: Nâng cấp toàn diện ngôn ngữ thiết kế từ Frosted Glass tĩnh sang Apple Liquid Glass chuẩn iOS 26 (khúc xạ quang học Dynamic Refraction, ánh sáng phản chiếu Specular Glare, gờ nổi kép Caustic Dual-Bevel, bóng đổ chiều sâu Deep Ambient Shadow, phản hồi lực đàn hồi Tactile Fluid Spring Feedback); hạ thấp thanh TabBar sát viền đáy tự nhiên; đồng bộ nút `+` và nút Tìm kiếm (Search) thành thấu kính Liquid Glass lens cùng kích thước $54\times54\text{px}$ xếp thẳng hàng theo cột.
 - **Chi tiết thay đổi**:
   - `ios-photo-app/src/index.css`: Xây dựng toàn bộ hệ thống lớp kính quang học Apple Liquid Glass:
