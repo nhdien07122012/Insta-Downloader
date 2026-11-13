@@ -5,7 +5,7 @@ Toàn bộ các phiên bản cập nhật, mã bản dựng (build number), chi 
 ---
 
 ## [v1.4.6 (Build 12)] - 2026-11-13
-- **Commit SHA**: `e111aa5`
+- **Commit SHA**: `41e2440`
 - **Mục tiêu**: Nâng cấp chất lượng video toàn diện, loại bỏ hiện tượng mờ/nhòe/vỡ hình khi tải video trên **Twitter (𝕏)** và **Instagram**. Luôn luôn ưu tiên tải bản Full HD 1080p / 720p gốc có bitrate cao nhất từ Twitter CDN (thay vì tải bản 240p/360p pre-render mờ căm), nâng cấp thuật toán nén thông minh với bộ lọc nội suy sắc nét Lanczos (`flags=lanczos`), tự động thích ứng độ phân giải theo bitrate khả dụng và truyền đầy đủ metadata (`width`, `height`, `duration`) khi gửi lên Telegram.
 - **Chi tiết thay đổi**:
   - `instagram.py`:
