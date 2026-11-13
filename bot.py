@@ -3,6 +3,9 @@ import re
 import html
 import asyncio
 import logging
+import shutil
+import subprocess
+import json
 from typing import List, Dict, Any
 from telegram import (
     Update,
@@ -53,6 +56,44 @@ async def self_destruct_message(bot, chat_id: Any, message_id: int, delay: int =
         await bot.delete_message(chat_id=chat_id, message_id=message_id)
     except Exception:
         pass
+
+
+def get_video_meta(video_path: str) -> dict:
+    """Trích xuất độ phân giải và thời lượng video bằng ffprobe nếu có."""
+    meta = {"width": None, "height": None, "duration": None}
+    ffprobe_bin = shutil.which("ffprobe")
+    if not ffprobe_bin or not os.path.exists(video_path):
+        return meta
+    try:
+        cmd = [
+            ffprobe_bin, "-v", "error",
+            "-select_streams", "v:0",
+            "-show_entries", "stream=width,height,duration:format=duration",
+            "-of", "json",
+            video_path,
+        ]
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=8)
+        if r.returncode == 0:
+            data = json.loads(r.stdout)
+            streams = data.get("streams", [])
+            fmt = data.get("format", {})
+            if streams:
+                w = streams[0].get("width")
+                h = streams[0].get("height")
+                dur = streams[0].get("duration")
+                if w and int(w) > 0:
+                    meta["width"] = int(w)
+                if h and int(h) > 0:
+                    meta["height"] = int(h)
+                if dur and dur != "N/A":
+                    meta["duration"] = int(float(dur))
+            if not meta["duration"]:
+                dur = fmt.get("duration")
+                if dur and dur != "N/A":
+                    meta["duration"] = int(float(dur))
+    except Exception:
+        pass
+    return meta
 
 
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -285,21 +326,25 @@ async def handle_instagram_message(update: Update, context: ContextTypes.DEFAULT
                         width = 0
                         height = 0
                     else:
+                        v_meta = get_video_meta(item["path"])
                         m_sent = await context.bot.send_video(
                             chat_id=destination_chat_id,
                             video=f,
                             caption=caption_storage,
                             parse_mode=ParseMode.HTML,
                             supports_streaming=True,
+                            duration=v_meta["duration"],
+                            width=v_meta["width"],
+                            height=v_meta["height"],
                             write_timeout=300.0,
                             read_timeout=300.0,
                         )
                         v_obj = m_sent.video or m_sent.animation or m_sent.document
                         file_id = v_obj.file_id if v_obj else ""
                         file_unique_id = v_obj.file_unique_id if v_obj else ""
-                        file_size = getattr(v_obj, "file_size", 0) or 0
-                        width = getattr(v_obj, "width", 0) or 0
-                        height = getattr(v_obj, "height", 0) or 0
+                        file_size = getattr(v_obj, "file_size", 0) or file_size_bytes
+                        width = getattr(v_obj, "width", 0) or v_meta["width"] or 0
+                        height = getattr(v_obj, "height", 0) or v_meta["height"] or 0
 
                 sent_messages.append(m_sent)
                 saved_media_records.append({
@@ -328,7 +373,16 @@ async def handle_instagram_message(update: Update, context: ContextTypes.DEFAULT
                     if m["type"] == "photo":
                         media_group.append(InputMediaPhoto(media=fh, caption=cap, parse_mode=pm))
                     else:
-                        media_group.append(InputMediaVideo(media=fh, caption=cap, parse_mode=pm, supports_streaming=True))
+                        v_meta = get_video_meta(m["path"])
+                        media_group.append(InputMediaVideo(
+                            media=fh,
+                            caption=cap,
+                            parse_mode=pm,
+                            supports_streaming=True,
+                            duration=v_meta["duration"],
+                            width=v_meta["width"],
+                            height=v_meta["height"],
+                        ))
 
                 try:
                     msgs = await context.bot.send_media_group(

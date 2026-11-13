@@ -76,9 +76,14 @@ def extract_shortcode(url_or_text: str) -> Optional[str]:
 
 
 def compress_video_to_size(video_path: Path, max_size_mb: float = 48.5) -> Path:
-    """Nén video nếu dung lượng vượt quá giới hạn Telegram Bot API (50MB) bằng ffmpeg."""
+    """
+    Nén video thông minh nếu dung lượng vượt quá giới hạn Telegram Bot API (50MB) bằng ffmpeg.
+    Tự động tính toán bitrate và chọn phân giải tối ưu (Lanczos filter) để video luôn sắc nét nhất.
+    """
     import shutil
     import subprocess
+    import json
+    import re
 
     if not video_path.exists():
         return video_path
@@ -92,40 +97,85 @@ def compress_video_to_size(video_path: Path, max_size_mb: float = 48.5) -> Path:
         print(f"[Warning] Video dung lượng {current_size_mb:.1f}MB nhưng chưa cài ffmpeg trên máy.")
         return video_path
 
-    # Lấy thời lượng video bằng ffprobe
+    # 1. Trích xuất chính xác thời lượng và độ phân giải video
     duration = None
     ffprobe_bin = shutil.which("ffprobe")
     if ffprobe_bin:
         cmd_dur = [
             ffprobe_bin, "-v", "error",
-            "-show_entries", "format=duration",
-            "-of", "default=noprint_wrappers=1:nokey=1",
+            "-select_streams", "v:0",
+            "-show_entries", "stream=width,height,duration:format=duration",
+            "-of", "json",
             str(video_path),
         ]
         try:
-            r = subprocess.run(cmd_dur, capture_output=True, text=True, timeout=10)
+            r = subprocess.run(cmd_dur, capture_output=True, text=True, timeout=12)
             if r.returncode == 0 and r.stdout.strip():
-                duration = float(r.stdout.strip())
+                p_data = json.loads(r.stdout)
+                fmt_dur = p_data.get("format", {}).get("duration")
+                streams = p_data.get("streams", [])
+                st_dur = streams[0].get("duration") if streams else None
+                if fmt_dur and fmt_dur != "N/A":
+                    duration = float(fmt_dur)
+                elif st_dur and st_dur != "N/A":
+                    duration = float(st_dur)
+        except Exception:
+            pass
+
+    # Dự phòng lấy duration qua ffmpeg -i nếu ffprobe không đọc được
+    if not duration or duration <= 0:
+        try:
+            r_ff = subprocess.run([ffmpeg_bin, "-i", str(video_path)], capture_output=True, text=True, timeout=10)
+            m_dur = re.search(r"Duration:\s*(\d+):(\d+):(\d+(?:\.\d+)?)", r_ff.stderr)
+            if m_dur:
+                h, m, s = float(m_dur.group(1)), float(m_dur.group(2)), float(m_dur.group(3))
+                duration = h * 3600 + m * 60 + s
         except Exception:
             pass
 
     if not duration or duration <= 0:
-        duration = 300.0
+        duration = 180.0
 
-    target_total_bits = (max_size_mb * 1024 * 1024 * 8) * 0.95
-    target_bitrate_kbps = max(int((target_total_bits / duration) / 1000), 100)
-    audio_bitrate_kbps = 64
-    video_bitrate_kbps = max(target_bitrate_kbps - audio_bitrate_kbps, 64)
+    # 2. Tính toán bitrate mục tiêu với dung lượng đích ~45.5MB (dưới 48.5MB, an toàn tuyệt đối với trần 50MB)
+    target_total_bits = (max_size_mb * 1024 * 1024 * 8) * 0.94
+    total_bitrate_kbps = int((target_total_bits / duration) / 1000)
+
+    # Phân bổ bitrate âm thanh hợp lý (96k-128k cho âm thanh trong trẻo, 64k cho video siêu dài)
+    if total_bitrate_kbps > 1500:
+        audio_bitrate_kbps = 128
+    elif total_bitrate_kbps > 600:
+        audio_bitrate_kbps = 96
+    else:
+        audio_bitrate_kbps = 64
+
+    video_bitrate_kbps = max(total_bitrate_kbps - audio_bitrate_kbps, 150)
+
+    # 3. Thuật toán chọn độ phân giải tương xứng với bitrate để video nét căng (bộ lọc nội suy Lanczos)
+    if video_bitrate_kbps >= 2400:
+        # Video ngắn/vừa (< 2.5 phút) -> Giữ nguyên Full HD 1080p cực nét
+        scale_filter = "scale='min(1920,iw)':-2:flags=lanczos"
+    elif video_bitrate_kbps >= 1000:
+        # Video 3 - 6 phút -> Chuẩn HD 720p rõ nét trên mọi màn hình điện thoại
+        scale_filter = "scale='min(1280,iw)':-2:flags=lanczos"
+    elif video_bitrate_kbps >= 500:
+        # Video 6 - 12 phút -> 540p qHD nét mịn, loại bỏ hiện tượng nhòe vỡ hạt
+        scale_filter = "scale='min(960,iw)':-2:flags=lanczos"
+    else:
+        # Video rất dài (> 12 phút) -> 480p SD với bộ lọc Lanczos cao cấp
+        scale_filter = "scale='min(854,iw)':-2:flags=lanczos"
 
     output_compressed = video_path.parent / f"compressed_{video_path.name}"
     cmd_compress = [
         ffmpeg_bin, "-y",
         "-i", str(video_path),
-        "-vf", "scale='min(1280,iw)':-2",
+        "-vf", scale_filter,
         "-c:v", "libx264",
         "-preset", "faster",
+        "-profile:v", "high",
+        "-level", "4.1",
+        "-pix_fmt", "yuv420p",
         "-b:v", f"{video_bitrate_kbps}k",
-        "-maxrate", f"{int(video_bitrate_kbps * 1.3)}k",
+        "-maxrate", f"{int(video_bitrate_kbps * 1.35)}k",
         "-bufsize", f"{int(video_bitrate_kbps * 2)}k",
         "-c:a", "aac",
         "-b:a", f"{audio_bitrate_kbps}k",
@@ -133,10 +183,10 @@ def compress_video_to_size(video_path: Path, max_size_mb: float = 48.5) -> Path:
         str(output_compressed),
     ]
     try:
-        r_comp = subprocess.run(cmd_compress, capture_output=True, text=True, timeout=300)
+        r_comp = subprocess.run(cmd_compress, capture_output=True, text=True, timeout=360)
         if r_comp.returncode == 0 and output_compressed.exists() and output_compressed.stat().st_size > 1000:
             new_size_mb = output_compressed.stat().st_size / (1024 * 1024)
-            print(f"[Info] Đã nén video từ {current_size_mb:.1f}MB xuống {new_size_mb:.1f}MB thành công.")
+            print(f"[Info] Đã nén video chất lượng cao từ {current_size_mb:.1f}MB xuống {new_size_mb:.1f}MB thành công.")
             output_compressed.replace(video_path)
     except Exception as e_comp:
         print(f"[Warning] Lỗi khi nén video bằng ffmpeg: {e_comp}")
@@ -264,30 +314,15 @@ class InstagramDownloader:
                             is_video = m_type in ("video", "gif")
                             m_url = item.get("url")
 
-                            # Nếu là video: tối ưu hóa chọn độ phân giải và nén phù hợp giới hạn 50MB
+                            # Nếu là video: LUÔN LUÔN ưu tiên lấy phiên bản có độ nét cao nhất (1080p / 720p HD)
                             if is_video:
-                                duration = item.get("duration") or 0
-                                max_bitrate_bps = None
-                                if duration and duration > 0:
-                                    # Giới hạn bitrate để tổng file < 48MB
-                                    max_bitrate_bps = int((48.0 * 1024 * 1024 * 8) / duration)
-
                                 # 1. Kiểm tra formats từ FxTwitter (container mp4)
                                 formats = item.get("formats", [])
                                 mp4_formats = [f for f in formats if f.get("container") == "mp4" and f.get("url")]
                                 if mp4_formats:
-                                    if max_bitrate_bps:
-                                        fit_formats = [f for f in mp4_formats if f.get("bitrate", 0) <= max_bitrate_bps]
-                                        if fit_formats:
-                                            fit_formats.sort(key=lambda x: x.get("bitrate", 0), reverse=True)
-                                            m_url = fit_formats[0]["url"]
-                                        else:
-                                            # Nếu toàn bộ bitrate đều lớn, chọn cái nhỏ nhất
-                                            mp4_formats.sort(key=lambda x: x.get("bitrate", 0))
-                                            m_url = mp4_formats[0]["url"]
-                                    else:
-                                        mp4_formats.sort(key=lambda x: x.get("bitrate", 0), reverse=True)
-                                        m_url = mp4_formats[0]["url"]
+                                    # Sắp xếp ưu tiên độ phân giải và bitrate cao nhất để video nét căng
+                                    mp4_formats.sort(key=lambda x: (x.get("height", 0), x.get("bitrate", 0)), reverse=True)
+                                    m_url = mp4_formats[0]["url"]
 
                                 # 2. Kiểm tra variants từ Twitter API gốc
                                 elif "variants" in item:
@@ -312,7 +347,7 @@ class InstagramDownloader:
                                                 "outtmpl": m3u8_out,
                                                 "quiet": True,
                                                 "no_warnings": True,
-                                                "format": "best[filesize<?48M]/best",
+                                                "format": "bestvideo+bestaudio/best",
                                                 "merge_output_format": "mp4",
                                             }
                                             with yt_dlp.YoutubeDL(ydl_opts_m3u8) as ydl:
