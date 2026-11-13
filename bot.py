@@ -1,5 +1,7 @@
 import os
+import re
 import html
+import asyncio
 import logging
 from typing import List, Dict, Any
 from telegram import (
@@ -42,6 +44,15 @@ def format_channel_post_link(channel_id: Any, message_id: int) -> str:
     elif str_id.startswith("@"):
         return f"https://t.me/{str_id[1:]}/{message_id}"
     return ""
+
+
+async def self_destruct_message(bot, chat_id: Any, message_id: int, delay: int = 15):
+    """Tự động xóa tin nhắn cảnh báo sau một khoảng thời gian để giữ sạch kênh."""
+    try:
+        await asyncio.sleep(delay)
+        await bot.delete_message(chat_id=chat_id, message_id=message_id)
+    except Exception:
+        pass
 
 
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -194,9 +205,13 @@ async def handle_instagram_message(update: Update, context: ContextTypes.DEFAULT
         if is_channel or DELETE_LINK_MESSAGE:
             try:
                 await context.bot.delete_message(chat_id=msg.chat_id, message_id=msg.message_id)
-                logger.info(f"🗑️ Đã xóa tin nhắn link gốc (ID: {msg.message_id})")
+                logger.info(f"🗑️ Đã xóa tin nhắn link gốc (chat_id={msg.chat_id}, ID: {msg.message_id})")
             except Exception as e_del:
-                logger.warning(f"⚠️ Không thể xóa tin nhắn link (ID: {msg.message_id}): {e_del}")
+                err_str = str(e_del).lower()
+                if "message can't be deleted" in err_str and not is_channel:
+                    logger.debug("Tin nhắn trong chat riêng không thể xóa (giới hạn chính sách Telegram Bot API).")
+                else:
+                    logger.warning(f"⚠️ Không thể xóa tin nhắn link (ID: {msg.message_id}): {e_del}")
 
         if status_msg:
             await status_msg.edit_text(
@@ -340,27 +355,11 @@ async def handle_instagram_message(update: Update, context: ContextTypes.DEFAULT
         )
         await database.save_media_items(post_id, saved_media_records)
 
-        # 6. Phản hồi và Dọn dẹp tin nhắn chứa link
-        # Xóa tin nhắn link thô để Kênh lưu trữ luôn sạch đẹp, chỉ hiển thị Album ảnh
-        if is_channel or DELETE_LINK_MESSAGE:
-            try:
-                chat_id_to_delete = msg.chat_id
-                msg_id_to_delete = msg.message_id
-                logger.info(f"Đang tiến hành xóa tin nhắn link (chat_id={chat_id_to_delete}, msg_id={msg_id_to_delete})...")
-                await context.bot.delete_message(chat_id=chat_id_to_delete, message_id=msg_id_to_delete)
-                logger.info(f"🗑️ Đã xóa tin nhắn link gốc (ID: {msg_id_to_delete}) thành công.")
-            except Exception as e:
-                logger.error(
-                    f"⚠️ Không thể xóa tin nhắn link: {e}. "
-                    "Hãy kiểm tra quyền 'Delete messages' của Bot trong cài đặt Kênh!",
-                    exc_info=True
-                )
-
-        # Nếu gửi trong chat riêng: Cập nhật status_msg kèm nút bấm
+        # 6. Phản hồi cho người dùng nếu gửi trong chat riêng
         if status_msg:
             channel_link = format_channel_post_link(destination_chat_id, primary_message_id)
             keyboard = [
-                [InlineKeyboardButton("📸 Mở bài gốc Instagram", url=download_result["url"])]
+                [InlineKeyboardButton(f"{platform_icon} Mở bài gốc {platform_name}", url=download_result["url"])]
             ]
             if channel_link:
                 keyboard[0].append(InlineKeyboardButton("☁️ Xem trên Kênh lưu trữ", url=channel_link))
@@ -368,7 +367,7 @@ async def handle_instagram_message(update: Update, context: ContextTypes.DEFAULT
             reply_markup = InlineKeyboardMarkup(keyboard)
             success_text = (
                 f"✅ <b>ĐÃ LƯU VÀO KHO TELEGRAM THÀNH CÔNG!</b>\n\n"
-                f"• Tác giả: <b>@{author or 'Instagram'}</b>\n"
+                f"• Tác giả: <b>@{author or platform_name}</b>\n"
                 f"• Số lượng: <b>{len(saved_media_records)} tệp</b>\n"
                 f"• Mã bài: <code>{shortcode}</code>\n"
             )
@@ -379,10 +378,22 @@ async def handle_instagram_message(update: Update, context: ContextTypes.DEFAULT
             )
 
     except Exception as e:
-        logger.error(f"Error handling Instagram message: {e}", exc_info=True)
+        logger.error(f"Error handling media message: {e}", exc_info=True)
         if status_msg:
             error_msg = f"❌ <b>Lỗi khi tải hoặc lưu ảnh:</b>\n<code>{html.escape(str(e))}</code>"
             await status_msg.edit_text(error_msg, parse_mode=ParseMode.HTML)
+        elif is_channel:
+            # Gửi thông báo lỗi tạm thời vào kênh và tự động xóa sau 15 giây để admin biết nguyên nhân lỗi
+            try:
+                err_noti = await context.bot.send_message(
+                    chat_id=msg.chat_id,
+                    text=f"⚠️ <b>Không thể xử lý liên kết:</b>\n<code>{html.escape(str(e))}</code>",
+                    parse_mode=ParseMode.HTML,
+                    reply_to_message_id=msg.message_id,
+                )
+                asyncio.create_task(self_destruct_message(context.bot, msg.chat_id, err_noti.message_id, delay=15))
+            except Exception:
+                pass
 
     finally:
         if download_result and "target_dir" in download_result:
@@ -413,11 +424,11 @@ def create_bot_application() -> Application:
     app.add_handler(CommandHandler("recent", recent_command))
     app.add_handler(CommandHandler("status", status_command))
 
-    # Đăng ký message handler nhận link Instagram & Twitter/X (cả tin nhắn thường và tin trong channel)
+    # Đăng ký message handler nhận link Instagram & Twitter/X (cả tin nhắn thường, caption và tin trong channel)
+    url_pattern = re.compile(r"(instagram\.com|twitter\.com|x\.com|t\.co)", re.IGNORECASE)
     media_filter = (
-        (filters.TEXT | filters.CAPTION)
+        (filters.Regex(url_pattern) | filters.CaptionRegex(url_pattern))
         & (~filters.COMMAND)
-        & filters.Regex(r"(instagram\.com|twitter\.com|x\.com)")
     )
     app.add_handler(MessageHandler(media_filter, handle_instagram_message))
 

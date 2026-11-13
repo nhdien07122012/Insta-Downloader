@@ -24,13 +24,24 @@ INSTA_URL_PATTERN = re.compile(
 
 # Regex tìm kiếm link Twitter / X (tweet hoặc status)
 TWITTER_URL_PATTERN = re.compile(
-    r"https?://(?:www\.|mobile\.)?(?:twitter|x)\.com/(?:#!/)?([a-zA-Z0-9_]+)/status(?:es)?/(\d+)",
+    r"https?://(?:www\.|mobile\.)?(?:twitter|x)\.com/(?:#!/)?(?:i/)?(?:web/)?(?:([a-zA-Z0-9_]+)/)?status(?:es)?/(\d+)",
     re.IGNORECASE,
 )
 
 
 def extract_media_target(url_or_text: str) -> Optional[Dict[str, Any]]:
     """Trích xuất thông tin bài viết từ link Instagram hoặc Twitter/X."""
+    # 0. Giải mã link rút gọn t.co nếu có
+    tco_match = re.search(r"https?://t\.co/[a-zA-Z0-9]+", url_or_text)
+    if tco_match:
+        try:
+            import requests
+            r = requests.head(tco_match.group(0), allow_redirects=True, timeout=5)
+            if r.status_code in (200, 301, 302, 307, 308) and r.url:
+                url_or_text = r.url
+        except Exception:
+            pass
+
     # 1. Kiểm tra link Instagram
     insta_match = INSTA_URL_PATTERN.search(url_or_text)
     if insta_match:
@@ -44,7 +55,7 @@ def extract_media_target(url_or_text: str) -> Optional[Dict[str, Any]]:
     # 2. Kiểm tra link Twitter / X
     tw_match = TWITTER_URL_PATTERN.search(url_or_text)
     if tw_match:
-        username = tw_match.group(1)
+        username = tw_match.group(1) or "i"
         tweet_id = tw_match.group(2)
         return {
             "platform": "twitter",

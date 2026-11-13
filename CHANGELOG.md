@@ -4,6 +4,27 @@ Toàn bộ các phiên bản cập nhật, mã bản dựng (build number), chi 
 
 ---
 
+## [v1.4.2 (Build 8)] - 2026-11-13
+- **Commit SHA**: `91f9b83`
+- **Mục tiêu**: Nâng cấp độ tin cậy của Telegram Bot & TX3 Mini, mở rộng toàn diện regex nhận diện link Twitter/X/Instagram (hỗ trợ case-insensitive, caption, link rút gọn t.co, /i/status, /i/web/status), dọn dẹp logic xóa tin nhắn link Telegram (tránh lỗi xóa 2 lần gây cảnh báo sai) và thêm cơ chế phản hồi lỗi tự xóa thông minh trên Kênh lưu trữ.
+- **Chi tiết thay đổi**:
+  - `bot.py`:
+    - Nâng cấp `media_filter` sử dụng `re.IGNORECASE` và kết hợp cả `filters.Regex` lẫn `filters.CaptionRegex`, đảm bảo nhận diện mọi link trong text và caption (không bị bỏ lọt khi chữ viết hoa X.COM / Twitter.com).
+    - Loại bỏ đoạn gọi xóa tin nhắn link trùng lặp ở Bước 6 (trước đó gọi 2 lần gây lỗi "Message to delete not found").
+    - Bổ sung hàm `self_destruct_message` tự hủy thông báo lỗi sau 15 giây nếu link gửi vào Kênh bị hỏng, giúp Kênh luôn sạch đẹp mà Admin vẫn nắm bắt được nguyên nhân lỗi.
+  - `instagram.py`:
+    - Mở rộng `TWITTER_URL_PATTERN` hỗ trợ các định dạng URL: `/i/status/`, `/i/web/status/`, `/status/`, kèm tự động mở rộng link rút gọn `t.co` bằng `requests.head`.
+  - `ios-photo-app/package.json`: Nâng phiên bản lên `"1.4.2"`.
+  - `ios-photo-app/ios/App/App.xcodeproj/project.pbxproj`: Cập nhật `CURRENT_PROJECT_VERSION = 8;`.
+  - `ios-photo-app/src/components/SettingsModal.tsx`: Cập nhật chân trang hiển thị `InstaPhotos v1.4 • Build 8 (Bot Reliability & Direct IPA)`.
+- **Link tải IPA trực tiếp**: [https://github.com/nhdien07122012/Insta-Downloader/releases/latest/download/InstaPhotos.ipa](https://github.com/nhdien07122012/Insta-Downloader/releases/latest/download/InstaPhotos.ipa)
+- **Lệnh hoàn tác mẫu (Rollback)**:
+  ```bash
+  git revert HEAD --no-edit
+  ```
+
+---
+
 ## [v1.4.1 (Build 7)] - 2026-11-13
 - **Commit SHA**: `b8f114c`
 - **Mục tiêu**: 
