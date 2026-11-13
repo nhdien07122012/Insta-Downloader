@@ -5,7 +5,7 @@ Toàn bộ các phiên bản cập nhật, mã bản dựng (build number), chi 
 ---
 
 ## [v1.4.3 (Build 9)] - 2026-11-13
-- **Commit SHA**: `d1ea1fa`
+- **Commit SHA**: `ac179a9`
 - **Mục tiêu**: Bổ sung hỗ trợ tải ảnh từ Twitter Link Card Preview (đối với các bài viết chia sẻ link ngoài như Silzee/GestaltX không có ảnh upload trực tiếp) và cung cấp phản hồi thông báo cụ thể cho bài viết thuần văn bản (Text-only).
 - **Chi tiết thay đổi**:
   - `instagram.py`: Cập nhật `_download_twitter` bóc tách `card['image']['url']` và tự động đổi sang kích thước gốc `name=orig` để tải ảnh chất lượng cao khi tweet không có media đính kèm trực tiếp.
