@@ -5,6 +5,9 @@ on:
     branches: [ main, master ]
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     name: Build InstaPhotos IPA
@@ -66,3 +69,21 @@ jobs:
           name: InstaPhotos.ipa
           path: ios-photo-app/ios/App/InstaPhotos.ipa
           if-no-files-found: error
+
+      - name: Publish Direct IPA Download Release
+        uses: softprops/action-gh-release@v2
+        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+        with:
+          tag_name: latest
+          name: "InstaPhotos Latest Build"
+          body: |
+            Bản dựng IPA mới nhất được tự động biên dịch và tạo từ GitHub Actions.
+            
+            📲 **Link tải trực tiếp cho iPhone (Safari / TrollStore / AltStore / Scarlet):**
+            https://github.com/${{ github.repository }}/releases/latest/download/InstaPhotos.ipa
+          draft: false
+          prerelease: false
+          make_latest: true
+          files: ios-photo-app/ios/App/InstaPhotos.ipa
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

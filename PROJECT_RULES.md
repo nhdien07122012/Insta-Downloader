@@ -49,7 +49,15 @@ Tài liệu này là bộ quy chuẩn kỷ luật bắt buộc dành cho mọi A
 
 ---
 
-## 🚀 5. CHECKLIST BẮT BUỘC TRƯỚC KHI BÁO CÁO HOÀN THÀNH
+## 📦 5. QUY TẮC CUNG CẤP LINK TẢI IPA TRỰC TIẾP SAU MỖI BẢN DỰNG (Direct IPA Download Link Rule)
+- Sau mỗi lần cập nhật mã nguồn, tăng build và đẩy code lên GitHub (kích hoạt GitHub Actions `build-ipa.yml`), AI **BẮT BUỘC** phải đính kèm đường link tải trực tiếp file `.ipa` ngay trong câu trả lời báo cáo cho người dùng:
+  👉 **Link tải trực tiếp**: `https://github.com/nhdien07122012/Insta-Downloader/releases/latest/download/InstaPhotos.ipa`
+- **Mục đích**: Người dùng có thể bấm trực tiếp từ iPhone (Safari / TrollStore / Scarlet / AltStore) để tải ngay file `.ipa` gốc mà không cần phải đăng nhập GitHub, không cần vào tab Actions, và không phải giải nén file `.zip`.
+- Hệ thống workflow CI/CD `.github/workflows/build-ipa.yml` được cấu hình tự động đóng gói và xuất file `InstaPhotos.ipa` lên GitHub Release mang tag `latest` kèm quyền `contents: write`.
+
+---
+
+## 🚀 6. CHECKLIST BẮT BUỘC TRƯỚC KHI BÁO CÁO HOÀN THÀNH
 Trước khi thông báo hoàn tất nhiệm vụ cho người dùng, AI phải tự kiểm tra:
 - [ ] **Bảo toàn phạm vi**: Tất cả chức năng ngoài yêu cầu đều nguyên vẹn 100%, không bị ảnh hưởng ngoài ý muốn.
 - [ ] Nếu có ảnh hưởng liên đới: Đã hỏi ý kiến và được người dùng đồng ý trước khi can thiệp.
@@ -58,3 +66,4 @@ Trước khi thông báo hoàn tất nhiệm vụ cho người dùng, AI phải 
 - [ ] Đã tăng Build Number (`CURRENT_PROJECT_VERSION`) ở file cấu hình iOS.
 - [ ] Đã ghi đầy đủ nhật ký kỹ thuật vào `CHANGELOG.md`.
 - [ ] Đã commit và push mã nguồn sạch sẽ lên Git remote.
+- [ ] **Gửi kèm link tải IPA trực tiếp**: Đã chèn link tải nhanh `.ipa` (`https://github.com/nhdien07122012/Insta-Downloader/releases/latest/download/InstaPhotos.ipa`) vào phần báo cáo hoàn thành cho người dùng.

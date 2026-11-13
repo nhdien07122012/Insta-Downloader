@@ -88,36 +88,138 @@ class InstagramDownloader:
 
         clean_url = target["url"]
 
-        # Phương pháp 1: gallery-dl (Tối ưu nhất cho ảnh, album/carousel và video Instagram/Twitter)
+        # Nếu là Twitter / X: Sử dụng bộ cào Twitter chuyên dụng
+        if platform == "twitter":
+            return self._download_twitter(clean_url, item_id, target_dir)
+
+        # Nếu là Instagram:
+        # Phương pháp 1: gallery-dl (Tối ưu cho ảnh, album/carousel và video Instagram)
         try:
             res = self._download_with_gallery_dl(clean_url, item_id, target_dir)
-            res["platform"] = platform
+            res["platform"] = "instagram"
             return res
         except Exception as e_gdl:
             print(f"[gallery-dl Error] {e_gdl}. Đang thử phương pháp dự phòng yt-dlp...")
 
-        # Phương pháp 2: yt-dlp (Tốt cho Reels và Video Twitter/Instagram)
+        # Phương pháp 2: yt-dlp (Tốt cho Reels và Video)
         try:
             res = self._download_with_ytdlp(clean_url, item_id, target_dir)
-            res["platform"] = platform
+            res["platform"] = "instagram"
             return res
         except Exception as e_yt:
             print(f"[yt-dlp Error] {e_yt}")
 
         # Phương pháp 3: RapidAPI nếu có cấu hình (chỉ cho Instagram)
-        if platform == "instagram" and RAPIDAPI_KEY:
+        if RAPIDAPI_KEY:
             try:
                 res = self._download_with_rapidapi(clean_url, item_id, target_dir)
-                res["platform"] = platform
+                res["platform"] = "instagram"
                 return res
             except Exception as e_api:
                 print(f"[RapidAPI Error] {e_api}")
 
         # Nếu tất cả đều thất bại
-        platform_name = "Twitter (X)" if platform == "twitter" else "Instagram"
         raise RuntimeError(
-            f"Không thể tải media từ {platform_name}. "
+            "Không thể tải media từ Instagram. "
             "Vui lòng kiểm tra lại liên kết hoặc file 'cookies.txt'."
+        )
+
+    def _download_twitter(self, url: str, tweet_id: str, target_dir: Path) -> Dict[str, Any]:
+        """Tải ảnh và video chất lượng cao từ Twitter (X)."""
+        import requests
+
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        }
+
+        # 1. Thử dùng fxtwitter/vxtwitter API (tải ảnh gốc orig 100%, video mp4, không cần login)
+        api_endpoints = [
+            f"https://api.fxtwitter.com/status/{tweet_id}",
+            f"https://api.vxtwitter.com/status/{tweet_id}",
+        ]
+
+        for api_url in api_endpoints:
+            try:
+                resp = requests.get(api_url, headers=headers, timeout=12)
+                if resp.status_code == 200:
+                    data = resp.json()
+                    tweet = data.get("tweet")
+                    if tweet:
+                        author = (
+                            tweet.get("author", {}).get("screen_name", "")
+                            or tweet.get("author", {}).get("name", "")
+                        )
+                        caption = tweet.get("text", "") or ""
+                        media_info = tweet.get("media", {}) or {}
+
+                        items_to_download = []
+                        if "all" in media_info and media_info["all"]:
+                            items_to_download = media_info["all"]
+                        elif "photos" in media_info or "videos" in media_info:
+                            items_to_download = media_info.get("photos", []) + media_info.get("videos", [])
+
+                        media_files = []
+                        for idx, item in enumerate(items_to_download):
+                            m_type = item.get("type", "photo")
+                            is_video = m_type in ("video", "gif")
+                            m_url = item.get("url")
+
+                            # Nếu video, lấy url có bitrate cao nhất
+                            if is_video and "variants" in item:
+                                variants = [v for v in item["variants"] if v.get("content_type") == "video/mp4"]
+                                if variants:
+                                    variants.sort(key=lambda x: x.get("bitrate", 0), reverse=True)
+                                    m_url = variants[0].get("url", m_url)
+
+                            if not m_url:
+                                continue
+
+                            ext = "mp4" if is_video else "jpg"
+                            file_path = target_dir / f"{idx}_{m_type}.{ext}"
+
+                            r_file = requests.get(m_url, headers=headers, timeout=60, stream=True)
+                            if r_file.status_code == 200:
+                                with open(file_path, "wb") as f:
+                                    for chunk in r_file.iter_content(chunk_size=65536):
+                                        if chunk:
+                                            f.write(chunk)
+                                media_files.append({
+                                    "path": str(file_path),
+                                    "type": "video" if is_video else "photo",
+                                })
+
+                        if media_files:
+                            return {
+                                "platform": "twitter",
+                                "shortcode": tweet_id,
+                                "url": url,
+                                "author": author,
+                                "caption": caption,
+                                "media_files": media_files,
+                                "target_dir": target_dir,
+                            }
+            except Exception as e_api:
+                print(f"[Warning] Twitter API {api_url} failed: {e_api}")
+
+        # 2. Phương pháp dự phòng 1: yt-dlp
+        try:
+            res = self._download_with_ytdlp(url, tweet_id, target_dir)
+            res["platform"] = "twitter"
+            return res
+        except Exception as e_yt:
+            print(f"[yt-dlp Twitter Error] {e_yt}")
+
+        # 3. Phương pháp dự phòng 2: gallery-dl
+        try:
+            res = self._download_with_gallery_dl(url, tweet_id, target_dir)
+            res["platform"] = "twitter"
+            return res
+        except Exception as e_gdl:
+            print(f"[gallery-dl Twitter Error] {e_gdl}")
+
+        raise RuntimeError(
+            "Không thể tải ảnh hoặc video từ bài viết Twitter (X) này. "
+            "Có thể tweet ở chế độ riêng tư (private) hoặc không chứa ảnh/video."
         )
 
     def _download_with_gallery_dl(self, url: str, shortcode: str, target_dir: Path) -> Dict[str, Any]:

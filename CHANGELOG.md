@@ -4,6 +4,26 @@ Toàn bộ các phiên bản cập nhật, mã bản dựng (build number), chi 
 
 ---
 
+## [v1.4.1 (Build 7)] - 2026-11-13
+- **Commit SHA**: `9f1e78e`
+- **Mục tiêu**: 
+  1. Khắc phục triệt để lỗi không tải được ảnh/video từ Twitter (X) bằng cơ chế trích xuất đa tầng (FxTwitter/VxTwitter API gốc + yt-dlp + gallery-dl fallback), tải trọn vẹn ảnh full resolution (`orig`) và video MP4 chất lượng cao không cần đăng nhập hay cookies.
+  2. Bổ sung quy tắc dự án và tự động hóa CI/CD xuất bản GitHub Release với link tải trực tiếp file `.ipa` 1 chạm cho iPhone, không cần tài khoản GitHub hay giải nén zip.
+- **Chi tiết thay đổi**:
+  - `instagram.py`: Tách riêng quy trình xử lý `_download_twitter()`, tích hợp endpoint FxTwitter/VxTwitter API trích xuất media tweet trực tiếp, chọn bitrate video MP4 cao nhất và lưu trữ ảnh gốc.
+  - `.github/workflows/build-ipa.yml`: Bổ sung quyền `contents: write` và action `softprops/action-gh-release@v2` tự động đẩy `InstaPhotos.ipa` lên Release mang tag `latest` kèm link tải trực tiếp.
+  - `PROJECT_RULES.md`: Bổ sung Điều 5 ("Quy tắc cung cấp link tải IPA trực tiếp sau mỗi bản dựng") và cập nhật checklist bắt buộc trước khi báo cáo hoàn thành.
+  - `ios-photo-app/package.json`: Nâng phiên bản lên `"1.4.1"`.
+  - `ios-photo-app/ios/App/App.xcodeproj/project.pbxproj`: Cập nhật `CURRENT_PROJECT_VERSION = 7;`.
+  - `ios-photo-app/src/components/SettingsModal.tsx`: Cập nhật chân trang hiển thị `InstaPhotos v1.4 • Build 7 (Twitter Fix & Direct IPA Release)`.
+- **Link tải IPA trực tiếp**: [https://github.com/nhdien07122012/Insta-Downloader/releases/latest/download/InstaPhotos.ipa](https://github.com/nhdien07122012/Insta-Downloader/releases/latest/download/InstaPhotos.ipa)
+- **Lệnh hoàn tác mẫu (Rollback)**:
+  ```bash
+  git revert HEAD --no-edit
+  ```
+
+---
+
 ## [v1.4 (Build 6)] - 2026-11-13
 - **Commit SHA**: `96f231b`
 - **Mục tiêu**: Mở rộng toàn diện hệ sinh thái tải media cho cả **Instagram** và **Twitter (X)**, hỗ trợ tải và phát video trực tiếp trong app (In-App Native Video Player), bổ sung danh mục bộ lọc Video và hỗ trợ lưu Video MP4 về Thư viện iPhone (Camera Roll).
