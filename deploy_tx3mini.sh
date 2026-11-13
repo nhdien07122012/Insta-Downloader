@@ -9,9 +9,9 @@ set -e
 echo "🚀 Bắt đầu cài đặt Insta-Downloader trên TX3 Mini..."
 
 # 1. Cài đặt các gói phụ thuộc hệ thống
-echo "📦 1. Cài đặt Python và các công cụ cần thiết..."
+echo "📦 1. Cài đặt Python, FFmpeg và các công cụ cần thiết..."
 sudo apt-get update
-sudo apt-get install -y python3 python3-pip python3-venv git
+sudo apt-get install -y python3 python3-pip python3-venv git ffmpeg
 
 # 2. Tạo thư mục làm việc chuẩn tại /opt/insta-downloader nếu chưa có
 APP_DIR="/opt/insta-downloader"

@@ -265,21 +265,41 @@ async def handle_instagram_message(update: Update, context: ContextTypes.DEFAULT
                     width = m_sent.photo[-1].width
                     height = m_sent.photo[-1].height
                 else:
-                    m_sent = await context.bot.send_video(
-                        chat_id=destination_chat_id,
-                        video=f,
-                        caption=caption_storage,
-                        parse_mode=ParseMode.HTML,
-                        supports_streaming=True,
-                        write_timeout=180.0,
-                        read_timeout=180.0,
-                    )
-                    v_obj = m_sent.video or m_sent.animation or m_sent.document
-                    file_id = v_obj.file_id if v_obj else ""
-                    file_unique_id = v_obj.file_unique_id if v_obj else ""
-                    file_size = getattr(v_obj, "file_size", 0) or 0
-                    width = getattr(v_obj, "width", 0) or 0
-                    height = getattr(v_obj, "height", 0) or 0
+                    file_size_bytes = os.path.getsize(item["path"])
+                    if file_size_bytes > 50 * 1024 * 1024:
+                        size_mb = file_size_bytes / (1024 * 1024)
+                        warn_caption = (
+                            f"{caption_storage}\n\n"
+                            f"⚠️ <b>Video có dung lượng {size_mb:.1f}MB</b> (vượt quá giới hạn 50MB của Telegram Bot API).\n"
+                            f"💡 <i>Gợi ý: Cài đặt ffmpeg trên TX3 Mini (<code>sudo apt-get install -y ffmpeg</code>) để Bot tự động nén video dài về dưới 50MB.</i>"
+                        )
+                        m_sent = await context.bot.send_message(
+                            chat_id=destination_chat_id,
+                            text=warn_caption,
+                            parse_mode=ParseMode.HTML,
+                            disable_web_page_preview=False,
+                        )
+                        file_id = ""
+                        file_unique_id = ""
+                        file_size = file_size_bytes
+                        width = 0
+                        height = 0
+                    else:
+                        m_sent = await context.bot.send_video(
+                            chat_id=destination_chat_id,
+                            video=f,
+                            caption=caption_storage,
+                            parse_mode=ParseMode.HTML,
+                            supports_streaming=True,
+                            write_timeout=300.0,
+                            read_timeout=300.0,
+                        )
+                        v_obj = m_sent.video or m_sent.animation or m_sent.document
+                        file_id = v_obj.file_id if v_obj else ""
+                        file_unique_id = v_obj.file_unique_id if v_obj else ""
+                        file_size = getattr(v_obj, "file_size", 0) or 0
+                        width = getattr(v_obj, "width", 0) or 0
+                        height = getattr(v_obj, "height", 0) or 0
 
                 sent_messages.append(m_sent)
                 saved_media_records.append({
@@ -314,8 +334,8 @@ async def handle_instagram_message(update: Update, context: ContextTypes.DEFAULT
                     msgs = await context.bot.send_media_group(
                         chat_id=destination_chat_id,
                         media=media_group,
-                        write_timeout=180.0,
-                        read_timeout=180.0,
+                        write_timeout=300.0,
+                        read_timeout=300.0,
                     )
                     sent_messages.extend(msgs)
 
@@ -411,12 +431,12 @@ def create_bot_application() -> Application:
             "Chưa cấu hình TELEGRAM_BOT_TOKEN! Hãy tạo file .env và điền Token từ @BotFather."
         )
 
-    # Tăng timeout lên 120 giây để TX3 Mini upload các album ảnh 4K/video nặng qua Wi-Fi không bị ngắt TimedOut
+    # Tăng timeout lên 300 giây để TX3 Mini upload các album ảnh 4K/video dài nặng qua Wi-Fi không bị ngắt TimedOut
     request = HTTPXRequest(
-        connect_timeout=30.0,
-        read_timeout=120.0,
-        write_timeout=120.0,
-        pool_timeout=30.0,
+        connect_timeout=60.0,
+        read_timeout=300.0,
+        write_timeout=300.0,
+        pool_timeout=60.0,
     )
 
     app = Application.builder().token(TELEGRAM_BOT_TOKEN).request(request).build()

@@ -75,6 +75,75 @@ def extract_shortcode(url_or_text: str) -> Optional[str]:
     return None
 
 
+def compress_video_to_size(video_path: Path, max_size_mb: float = 48.5) -> Path:
+    """Nén video nếu dung lượng vượt quá giới hạn Telegram Bot API (50MB) bằng ffmpeg."""
+    import shutil
+    import subprocess
+
+    if not video_path.exists():
+        return video_path
+
+    current_size_mb = video_path.stat().st_size / (1024 * 1024)
+    if current_size_mb <= max_size_mb:
+        return video_path
+
+    ffmpeg_bin = shutil.which("ffmpeg")
+    if not ffmpeg_bin:
+        print(f"[Warning] Video dung lượng {current_size_mb:.1f}MB nhưng chưa cài ffmpeg trên máy.")
+        return video_path
+
+    # Lấy thời lượng video bằng ffprobe
+    duration = None
+    ffprobe_bin = shutil.which("ffprobe")
+    if ffprobe_bin:
+        cmd_dur = [
+            ffprobe_bin, "-v", "error",
+            "-show_entries", "format=duration",
+            "-of", "default=noprint_wrappers=1:nokey=1",
+            str(video_path),
+        ]
+        try:
+            r = subprocess.run(cmd_dur, capture_output=True, text=True, timeout=10)
+            if r.returncode == 0 and r.stdout.strip():
+                duration = float(r.stdout.strip())
+        except Exception:
+            pass
+
+    if not duration or duration <= 0:
+        duration = 300.0
+
+    target_total_bits = (max_size_mb * 1024 * 1024 * 8) * 0.95
+    target_bitrate_kbps = max(int((target_total_bits / duration) / 1000), 100)
+    audio_bitrate_kbps = 64
+    video_bitrate_kbps = max(target_bitrate_kbps - audio_bitrate_kbps, 64)
+
+    output_compressed = video_path.parent / f"compressed_{video_path.name}"
+    cmd_compress = [
+        ffmpeg_bin, "-y",
+        "-i", str(video_path),
+        "-vf", "scale='min(1280,iw)':-2",
+        "-c:v", "libx264",
+        "-preset", "faster",
+        "-b:v", f"{video_bitrate_kbps}k",
+        "-maxrate", f"{int(video_bitrate_kbps * 1.3)}k",
+        "-bufsize", f"{int(video_bitrate_kbps * 2)}k",
+        "-c:a", "aac",
+        "-b:a", f"{audio_bitrate_kbps}k",
+        "-movflags", "+faststart",
+        str(output_compressed),
+    ]
+    try:
+        r_comp = subprocess.run(cmd_compress, capture_output=True, text=True, timeout=300)
+        if r_comp.returncode == 0 and output_compressed.exists() and output_compressed.stat().st_size > 1000:
+            new_size_mb = output_compressed.stat().st_size / (1024 * 1024)
+            print(f"[Info] Đã nén video từ {current_size_mb:.1f}MB xuống {new_size_mb:.1f}MB thành công.")
+            output_compressed.replace(video_path)
+    except Exception as e_comp:
+        print(f"[Warning] Lỗi khi nén video bằng ffmpeg: {e_comp}")
+
+    return video_path
+
+
 class InstagramDownloader:
     def __init__(self):
         pass
@@ -195,23 +264,69 @@ class InstagramDownloader:
                             is_video = m_type in ("video", "gif")
                             m_url = item.get("url")
 
-                            # Nếu là video: tìm link video chất lượng cao nhất
+                            # Nếu là video: tối ưu hóa chọn độ phân giải và nén phù hợp giới hạn 50MB
                             if is_video:
+                                duration = item.get("duration") or 0
+                                max_bitrate_bps = None
+                                if duration and duration > 0:
+                                    # Giới hạn bitrate để tổng file < 48MB
+                                    max_bitrate_bps = int((48.0 * 1024 * 1024 * 8) / duration)
+
                                 # 1. Kiểm tra formats từ FxTwitter (container mp4)
                                 formats = item.get("formats", [])
                                 mp4_formats = [f for f in formats if f.get("container") == "mp4" and f.get("url")]
                                 if mp4_formats:
-                                    mp4_formats.sort(key=lambda x: x.get("bitrate", 0), reverse=True)
-                                    m_url = mp4_formats[0]["url"]
+                                    if max_bitrate_bps:
+                                        fit_formats = [f for f in mp4_formats if f.get("bitrate", 0) <= max_bitrate_bps]
+                                        if fit_formats:
+                                            fit_formats.sort(key=lambda x: x.get("bitrate", 0), reverse=True)
+                                            m_url = fit_formats[0]["url"]
+                                        else:
+                                            # Nếu toàn bộ bitrate đều lớn, chọn cái nhỏ nhất
+                                            mp4_formats.sort(key=lambda x: x.get("bitrate", 0))
+                                            m_url = mp4_formats[0]["url"]
+                                    else:
+                                        mp4_formats.sort(key=lambda x: x.get("bitrate", 0), reverse=True)
+                                        m_url = mp4_formats[0]["url"]
+
                                 # 2. Kiểm tra variants từ Twitter API gốc
                                 elif "variants" in item:
                                     variants = [v for v in item["variants"] if v.get("content_type") == "video/mp4" and v.get("url")]
                                     if variants:
                                         variants.sort(key=lambda x: x.get("bitrate", 0), reverse=True)
                                         m_url = variants[0]["url"]
-                                # 3. Nếu m_url rỗng hoặc là playlist .m3u8, dùng redirect trực tiếp MP4
+
+                                # 3. Xử lý video stream HLS (.m3u8) nếu là video dài X Premium / Twitter Blue
                                 if not m_url or ".m3u8" in str(m_url):
-                                    m_url = f"https://d.fxtwitter.com/i/status/{tweet_id}"
+                                    m3u8_url = item.get("url")
+                                    if not m3u8_url or ".m3u8" not in m3u8_url:
+                                        for f in formats:
+                                            if ".m3u8" in str(f.get("url")):
+                                                m3u8_url = f["url"]
+                                                break
+                                    if m3u8_url and ".m3u8" in m3u8_url:
+                                        try:
+                                            import yt_dlp
+                                            m3u8_out = str(target_dir / f"{idx}_video.mp4")
+                                            ydl_opts_m3u8 = {
+                                                "outtmpl": m3u8_out,
+                                                "quiet": True,
+                                                "no_warnings": True,
+                                                "format": "best[filesize<?48M]/best",
+                                                "merge_output_format": "mp4",
+                                            }
+                                            with yt_dlp.YoutubeDL(ydl_opts_m3u8) as ydl:
+                                                ydl.download([m3u8_url])
+                                            m3u8_path = Path(m3u8_out)
+                                            if m3u8_path.exists() and m3u8_path.stat().st_size > 1000:
+                                                compress_video_to_size(m3u8_path, max_size_mb=48.5)
+                                                media_files.append({"path": str(m3u8_path), "type": "video"})
+                                                continue
+                                        except Exception as e_m3u8:
+                                            print(f"[Warning] Download m3u8 error: {e_m3u8}")
+
+                                    if not m_url:
+                                        m_url = f"https://d.fxtwitter.com/i/status/{tweet_id}"
 
                             if not m_url:
                                 continue
@@ -219,13 +334,15 @@ class InstagramDownloader:
                             ext = "mp4" if is_video else "jpg"
                             file_path = target_dir / f"{idx}_{m_type}.{ext}"
 
-                            r_file = requests.get(m_url, headers=headers, timeout=120, stream=True)
+                            r_file = requests.get(m_url, headers=headers, timeout=180, stream=True)
                             if r_file.status_code == 200:
                                 with open(file_path, "wb") as f:
                                     for chunk in r_file.iter_content(chunk_size=65536):
                                         if chunk:
                                             f.write(chunk)
                                 if file_path.exists() and file_path.stat().st_size > 100:
+                                    if is_video:
+                                        compress_video_to_size(file_path, max_size_mb=48.5)
                                     media_files.append({
                                         "path": str(file_path),
                                         "type": "video" if is_video else "photo",
@@ -364,6 +481,7 @@ class InstagramDownloader:
             if file.suffix.lower() in [".jpg", ".jpeg", ".png", ".webp"]:
                 media_files.append({"path": str(file), "type": "photo"})
             elif file.suffix.lower() in [".mp4", ".mov"]:
+                compress_video_to_size(file, max_size_mb=48.5)
                 media_files.append({"path": str(file), "type": "video"})
 
         if not media_files:
@@ -398,6 +516,7 @@ class InstagramDownloader:
             if file.suffix.lower() in [".jpg", ".jpeg", ".png", ".webp"]:
                 media_files.append({"path": str(file), "type": "photo"})
             elif file.suffix.lower() in [".mp4", ".mov"]:
+                compress_video_to_size(file, max_size_mb=48.5)
                 media_files.append({"path": str(file), "type": "video"})
 
         if not media_files:

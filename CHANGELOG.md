@@ -4,6 +4,31 @@ Toàn bộ các phiên bản cập nhật, mã bản dựng (build number), chi 
 
 ---
 
+## [v1.4.5 (Build 11)] - 2026-11-13
+- **Commit SHA**: `3c45851`
+- **Mục tiêu**: Khắc phục triệt để lỗi không tải được video dài trên **Twitter (X)**, hỗ trợ bóc tách & tải luồng HLS (`.m3u8`) từ các video dài / X Premium, tự động tính toán bitrate và tích hợp nén thông minh bằng `ffmpeg` để giữ dung lượng video luôn dưới 50MB (phù hợp giới hạn Telegram Bot API), đồng thời nâng mức giới hạn RAM của service systemd trên TX3 Mini từ 150MB lên 500MB và tăng timeout lên 300 giây.
+- **Chi tiết thay đổi**:
+  - `instagram.py`:
+    - Thêm hàm `compress_video_to_size(video_path, max_size_mb=48.5)`: Sử dụng `ffmpeg` tính toán bitrate tự động nén các video dài quá khổ về dưới 48.5MB.
+    - Bổ sung cơ chế xử lý stream HLS `.m3u8` qua `yt-dlp` khi Twitter/X không cung cấp file MP4 tĩnh trực tiếp.
+    - Tự động ước lượng bitrate phù hợp (`max_bitrate_bps = (48MB * 8) / duration`) để chọn phiên bản MP4 chất lượng cao nhất mà không bị vượt trần dung lượng.
+    - Tăng timeout download stream từ 120s lên 180s.
+  - `bot.py`:
+    - Tăng timeout upload `HTTPXRequest` (connect 60s, read/write 300s) và timeout `send_video` / `send_media_group` lên 300.0s.
+    - Thêm bước kiểm tra an toàn dung lượng `file_size_bytes > 50MB` kèm cảnh báo thân thiện thay vì để Telegram trả lỗi `BadRequest: File too large`.
+  - `instabot.service`: Nâng `MemoryMax=500M` để tránh Linux OOM Killer ngắt tiến trình Python khi đang nén/xử lý video dài trên TX3 Mini.
+  - `deploy_tx3mini.sh`: Tự động cài đặt gói `ffmpeg` trong lệnh `apt-get install`.
+  - `ios-photo-app/package.json`: Nâng phiên bản lên `"1.4.5"`.
+  - `ios-photo-app/ios/App/App.xcodeproj/project.pbxproj`: Cập nhật `CURRENT_PROJECT_VERSION = 11;`.
+  - `ios-photo-app/src/components/SettingsModal.tsx`: Cập nhật chân trang hiển thị `InstaPhotos v1.4.5 • Build 11 (Long Video & Auto-Compression)`.
+- **Link tải IPA trực tiếp**: [https://github.com/nhdien07122012/Insta-Downloader/releases/latest/download/InstaPhotos.ipa](https://github.com/nhdien07122012/Insta-Downloader/releases/latest/download/InstaPhotos.ipa)
+- **Lệnh hoàn tác mẫu (Rollback)**:
+  ```bash
+  git revert HEAD --no-edit
+  ```
+
+---
+
 ## [v1.4.4 (Build 10)] - 2026-11-13
 - **Commit SHA**: `794283a`
 - **Mục tiêu**: Nâng cấp toàn diện cơ chế tải và phát video cho cả **Twitter (X)** và **Instagram (Reels / Video)**, hỗ trợ bóc tách video MP4 chất lượng cao nhất (`formats` container mp4, direct redirect `d.fxtwitter.com`), bổ sung phương pháp dự phòng Instaloader cho Instagram và kích hoạt cờ `supports_streaming=True` khi đẩy video lên Telegram.

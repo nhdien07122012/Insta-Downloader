@@ -14,9 +14,9 @@ Restart=always
 RestartSec=10
 Environment=PYTHONUNBUFFERED=1
 
-# Giới hạn tài nguyên an toàn cho SoC Amlogic S905W (tránh tranh chấp RAM với AdGuard/Kuma)
+# Giới hạn tài nguyên an toàn cho SoC Amlogic S905W (nâng lên 500M để nén & upload video dài mượt mà)
 Nice=10
-MemoryMax=150M
+MemoryMax=500M
 
 [Install]
 WantedBy=multi-user.target
