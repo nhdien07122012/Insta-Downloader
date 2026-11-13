@@ -4,6 +4,29 @@ Toàn bộ các phiên bản cập nhật, mã bản dựng (build number), chi 
 
 ---
 
+## [v1.4.8 (Build 14)] - 2026-11-13
+- **Commit SHA**: `66f4e55`
+- **Mục tiêu**: Chuyên biệt hóa triệt để bot trên TX3 Mini thành bộ máy lưu trữ **ẢNH (Photos / Carousels / Link Cards)** siêu tốc cho cả **Instagram** và **Twitter (𝕏)** theo yêu cầu của người dùng. Loại bỏ hoàn toàn chức năng tải video và nén video bằng FFmpeg trên TX3 Mini để CPU luôn nhẹ nhàng, mát mẻ (5-7%) và tải ảnh chỉ mất 1-2 giây. Đồng thời **bảo toàn nguyên vẹn 100% tính năng trình phát video HD trên ứng dụng iOS**.
+- **Chi tiết thay đổi**:
+  - `instagram.py`:
+    - Loại bỏ toàn bộ lệnh gọi `ffmpeg` và logic nén video; hàm `compress_video_to_size` trở thành no-op.
+    - Cập nhật `_download_twitter`: Chỉ bóc tách và tải tệp loại `photo` (bao gồm ảnh đơn, album nhiều ảnh và ảnh Link Card preview như Silzee/GestaltX) ở kích thước gốc `name=orig`. Tự động từ chối bài viết thuần Video/GIF kèm thông báo rõ ràng.
+    - Cập nhật `_download_with_gallery_dl`: Thêm cờ lọc `--filter "extension in ('jpg', 'jpeg', 'png', 'webp')"` và chỉ thu thập tệp ảnh, bỏ qua hoàn toàn các định dạng video `.mp4`, `.mov`.
+    - Cập nhật `_download_with_instaloader`: Thiết lập `download_videos=False` và chỉ trích xuất ảnh.
+    - Loại bỏ `yt-dlp` khỏi luồng xử lý trên TX3 Mini.
+  - `ios-photo-app`:
+    - Bảo toàn 100% trình phát video trong `PhotoViewer.tsx` và cơ chế tải video HD từ Telegram MTProto trong `telegramClient.ts`.
+    - `ios-photo-app/package.json`: Nâng phiên bản lên `"1.4.8"`.
+    - `ios-photo-app/ios/App/App.xcodeproj/project.pbxproj`: Cập nhật `CURRENT_PROJECT_VERSION = 14;`.
+    - `ios-photo-app/src/components/SettingsModal.tsx`: Cập nhật chân trang hiển thị `InstaPhotos v1.4.8 • Build 14 (Photo-Focused & Video Player)`.
+- **Link tải IPA trực tiếp**: [https://github.com/nhdien07122012/Insta-Downloader/releases/latest/download/InstaPhotos.ipa](https://github.com/nhdien07122012/Insta-Downloader/releases/latest/download/InstaPhotos.ipa)
+- **Lệnh hoàn tác mẫu (Rollback)**:
+  ```bash
+  git revert HEAD --no-edit
+  ```
+
+---
+
 ## [v1.4.7 (Build 13)] - 2026-11-13
 - **Commit SHA**: `db1082d`
 - **Mục tiêu**: Xử lý triệt để bài toán tải và nén video siêu dài (từ 10 đến 30+ phút, ví dụ các clip 29 phút dung lượng gốc 1GB - 2.2GB trên **Twitter (𝕏)**). Bổ sung thuật toán chọn định dạng thông minh theo thời lượng (`estimated_size_mb`), ưu tiên gửi ngay bản gốc nếu tự nhiên <= 48.5MB (không tốn CPU, không cần ffmpeg), chọn nhóm 360p/480p cho video siêu dài để nén về dưới 50MB siêu tốc trong 2 phút (thay vì tải 1080p 2GB gây nghẽn và quá tải CPU), đồng thời kích hoạt preset `veryfast` và timeout động lên đến 2600s trên TX3 Mini.
