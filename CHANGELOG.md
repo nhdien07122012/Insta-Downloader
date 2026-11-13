@@ -5,7 +5,7 @@ Toàn bộ các phiên bản cập nhật, mã bản dựng (build number), chi 
 ---
 
 ## [v1.4.1 (Build 7)] - 2026-11-13
-- **Commit SHA**: `9f1e78e`
+- **Commit SHA**: `b8f114c`
 - **Mục tiêu**: 
   1. Khắc phục triệt để lỗi không tải được ảnh/video từ Twitter (X) bằng cơ chế trích xuất đa tầng (FxTwitter/VxTwitter API gốc + yt-dlp + gallery-dl fallback), tải trọn vẹn ảnh full resolution (`orig`) và video MP4 chất lượng cao không cần đăng nhập hay cookies.
   2. Bổ sung quy tắc dự án và tự động hóa CI/CD xuất bản GitHub Release với link tải trực tiếp file `.ipa` 1 chạm cho iPhone, không cần tài khoản GitHub hay giải nén zip.
