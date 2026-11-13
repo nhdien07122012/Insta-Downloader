@@ -5,7 +5,7 @@ Toàn bộ các phiên bản cập nhật, mã bản dựng (build number), chi 
 ---
 
 ## [v1.4 (Build 6)] - 2026-11-13
-- **Commit SHA**: *Sẽ cập nhật sau khi commit*
+- **Commit SHA**: `96f231b`
 - **Mục tiêu**: Mở rộng toàn diện hệ sinh thái tải media cho cả **Instagram** và **Twitter (X)**, hỗ trợ tải và phát video trực tiếp trong app (In-App Native Video Player), bổ sung danh mục bộ lọc Video và hỗ trợ lưu Video MP4 về Thư viện iPhone (Camera Roll).
 - **Chi tiết thay đổi**:
   - `bot.py` & `instagram.py`: 
