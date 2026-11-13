@@ -5,7 +5,7 @@ Toàn bộ các phiên bản cập nhật, mã bản dựng (build number), chi 
 ---
 
 ## [v1.4.2 (Build 8)] - 2026-11-13
-- **Commit SHA**: `91f9b83`
+- **Commit SHA**: `4224cc4`
 - **Mục tiêu**: Nâng cấp độ tin cậy của Telegram Bot & TX3 Mini, mở rộng toàn diện regex nhận diện link Twitter/X/Instagram (hỗ trợ case-insensitive, caption, link rút gọn t.co, /i/status, /i/web/status), dọn dẹp logic xóa tin nhắn link Telegram (tránh lỗi xóa 2 lần gây cảnh báo sai) và thêm cơ chế phản hồi lỗi tự xóa thông minh trên Kênh lưu trữ.
 - **Chi tiết thay đổi**:
   - `bot.py`:
