@@ -19,6 +19,8 @@ if [ "$PWD" != "$APP_DIR" ]; then
     echo "📁 2. Sao chép dự án vào $APP_DIR..."
     sudo mkdir -p $APP_DIR
     sudo cp -r ./* $APP_DIR/
+    sudo cp -r .git $APP_DIR/ 2>/dev/null || true
+    sudo cp .env* $APP_DIR/ 2>/dev/null || true
     cd $APP_DIR
 fi
 
