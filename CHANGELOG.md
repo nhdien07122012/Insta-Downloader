@@ -5,7 +5,7 @@ Toàn bộ các phiên bản cập nhật, mã bản dựng (build number), chi 
 ---
 
 ## [v1.4.7 (Build 13)] - 2026-11-13
-- **Commit SHA**: `63aabdc`
+- **Commit SHA**: `db1082d`
 - **Mục tiêu**: Xử lý triệt để bài toán tải và nén video siêu dài (từ 10 đến 30+ phút, ví dụ các clip 29 phút dung lượng gốc 1GB - 2.2GB trên **Twitter (𝕏)**). Bổ sung thuật toán chọn định dạng thông minh theo thời lượng (`estimated_size_mb`), ưu tiên gửi ngay bản gốc nếu tự nhiên <= 48.5MB (không tốn CPU, không cần ffmpeg), chọn nhóm 360p/480p cho video siêu dài để nén về dưới 50MB siêu tốc trong 2 phút (thay vì tải 1080p 2GB gây nghẽn và quá tải CPU), đồng thời kích hoạt preset `veryfast` và timeout động lên đến 2600s trên TX3 Mini.
 - **Chi tiết thay đổi**:
   - `instagram.py`:
