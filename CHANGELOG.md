@@ -4,6 +4,23 @@ Toàn bộ các phiên bản cập nhật, mã bản dựng (build number), chi 
 
 ---
 
+## [v1.4.3 (Build 9)] - 2026-11-13
+- **Commit SHA**: `d1ea1fa`
+- **Mục tiêu**: Bổ sung hỗ trợ tải ảnh từ Twitter Link Card Preview (đối với các bài viết chia sẻ link ngoài như Silzee/GestaltX không có ảnh upload trực tiếp) và cung cấp phản hồi thông báo cụ thể cho bài viết thuần văn bản (Text-only).
+- **Chi tiết thay đổi**:
+  - `instagram.py`: Cập nhật `_download_twitter` bóc tách `card['image']['url']` và tự động đổi sang kích thước gốc `name=orig` để tải ảnh chất lượng cao khi tweet không có media đính kèm trực tiếp.
+  - `deploy_tx3mini.sh`: Bảo toàn thư mục `.git` và file `.env*` khi triển khai để TX3 Mini luôn giữ được liên kết git.
+  - `ios-photo-app/package.json`: Nâng phiên bản lên `"1.4.3"`.
+  - `ios-photo-app/ios/App/App.xcodeproj/project.pbxproj`: Cập nhật `CURRENT_PROJECT_VERSION = 9;`.
+  - `ios-photo-app/src/components/SettingsModal.tsx`: Cập nhật chân trang hiển thị `InstaPhotos v1.4 • Build 9 (Twitter Card & Media Support)`.
+- **Link tải IPA trực tiếp**: [https://github.com/nhdien07122012/Insta-Downloader/releases/latest/download/InstaPhotos.ipa](https://github.com/nhdien07122012/Insta-Downloader/releases/latest/download/InstaPhotos.ipa)
+- **Lệnh hoàn tác mẫu (Rollback)**:
+  ```bash
+  git revert HEAD --no-edit
+  ```
+
+---
+
 ## [v1.4.2 (Build 8)] - 2026-11-13
 - **Commit SHA**: `4224cc4`
 - **Mục tiêu**: Nâng cấp độ tin cậy của Telegram Bot & TX3 Mini, mở rộng toàn diện regex nhận diện link Twitter/X/Instagram (hỗ trợ case-insensitive, caption, link rút gọn t.co, /i/status, /i/web/status), dọn dẹp logic xóa tin nhắn link Telegram (tránh lỗi xóa 2 lần gây cảnh báo sai) và thêm cơ chế phản hồi lỗi tự xóa thông minh trên Kênh lưu trữ.

@@ -169,6 +169,19 @@ class InstagramDownloader:
                         elif "photos" in media_info or "videos" in media_info:
                             items_to_download = media_info.get("photos", []) + media_info.get("videos", [])
 
+                        # Hỗ trợ ảnh từ Link Card Preview nếu tweet chia sẻ link web (như GestaltX/Silzee)
+                        if not items_to_download and "card" in tweet and tweet["card"]:
+                            card = tweet["card"]
+                            if isinstance(card, dict) and "image" in card and card["image"]:
+                                card_img = card["image"]
+                                card_url = card_img.get("url") if isinstance(card_img, dict) else str(card_img)
+                                if card_url:
+                                    card_url_orig = re.sub(r"name=\w+", "name=orig", card_url)
+                                    items_to_download.append({
+                                        "type": "photo",
+                                        "url": card_url_orig,
+                                    })
+
                         media_files = []
                         for idx, item in enumerate(items_to_download):
                             m_type = item.get("type", "photo")
@@ -229,8 +242,7 @@ class InstagramDownloader:
             print(f"[gallery-dl Twitter Error] {e_gdl}")
 
         raise RuntimeError(
-            "Không thể tải ảnh hoặc video từ bài viết Twitter (X) này. "
-            "Có thể tweet ở chế độ riêng tư (private) hoặc không chứa ảnh/video."
+            "Bài viết Twitter (X) này chỉ chứa văn bản thuần túy hoặc không có ảnh/video để tải."
         )
 
     def _download_with_gallery_dl(self, url: str, shortcode: str, target_dir: Path) -> Dict[str, Any]:
