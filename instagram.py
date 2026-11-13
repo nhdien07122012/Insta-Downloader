@@ -164,13 +164,27 @@ def compress_video_to_size(video_path: Path, max_size_mb: float = 48.5) -> Path:
         # Video rất dài (> 12 phút) -> 480p SD với bộ lọc Lanczos cao cấp
         scale_filter = "scale='min(854,iw)':-2:flags=lanczos"
 
+    # 4. Cấu hình preset và timeout thích ứng theo thời lượng video
+    if duration > 1200:
+        # Video siêu dài (> 20 phút): dùng veryfast để nén nhanh hơn 2-3 lần trên SoC S905W
+        preset = "veryfast"
+        timeout_sec = max(600, int(duration * 1.5))
+    elif duration > 300:
+        # Video vừa (5 - 20 phút)
+        preset = "faster"
+        timeout_sec = max(450, int(duration * 1.5))
+    else:
+        # Video ngắn (< 5 phút)
+        preset = "faster"
+        timeout_sec = 360
+
     output_compressed = video_path.parent / f"compressed_{video_path.name}"
     cmd_compress = [
         ffmpeg_bin, "-y",
         "-i", str(video_path),
         "-vf", scale_filter,
         "-c:v", "libx264",
-        "-preset", "faster",
+        "-preset", preset,
         "-profile:v", "high",
         "-level", "4.1",
         "-pix_fmt", "yuv420p",
@@ -183,7 +197,7 @@ def compress_video_to_size(video_path: Path, max_size_mb: float = 48.5) -> Path:
         str(output_compressed),
     ]
     try:
-        r_comp = subprocess.run(cmd_compress, capture_output=True, text=True, timeout=360)
+        r_comp = subprocess.run(cmd_compress, capture_output=True, text=True, timeout=timeout_sec)
         if r_comp.returncode == 0 and output_compressed.exists() and output_compressed.stat().st_size > 1000:
             new_size_mb = output_compressed.stat().st_size / (1024 * 1024)
             print(f"[Info] Đã nén video chất lượng cao từ {current_size_mb:.1f}MB xuống {new_size_mb:.1f}MB thành công.")
@@ -314,17 +328,52 @@ class InstagramDownloader:
                             is_video = m_type in ("video", "gif")
                             m_url = item.get("url")
 
-                            # Nếu là video: LUÔN LUÔN ưu tiên lấy phiên bản có độ nét cao nhất (1080p / 720p HD)
+                            # Nếu là video: Thuật toán chọn định dạng thông minh theo thời lượng & trần 50MB Telegram
                             if is_video:
-                                # 1. Kiểm tra formats từ FxTwitter (container mp4)
+                                duration = item.get("duration") or 0
                                 formats = item.get("formats", [])
                                 mp4_formats = [f for f in formats if f.get("container") == "mp4" and f.get("url")]
-                                if mp4_formats:
-                                    # Sắp xếp ưu tiên độ phân giải và bitrate cao nhất để video nét căng
-                                    mp4_formats.sort(key=lambda x: (x.get("height", 0), x.get("bitrate", 0)), reverse=True)
-                                    m_url = mp4_formats[0]["url"]
 
-                                # 2. Kiểm tra variants từ Twitter API gốc
+                                if mp4_formats:
+                                    for f in mp4_formats:
+                                        br = f.get("bitrate", 0)
+                                        if br and duration and duration > 0:
+                                            f["estimated_size_mb"] = (br * duration) / (8 * 1024 * 1024)
+                                        else:
+                                            f["estimated_size_mb"] = 0
+
+                                    # 1. Nếu có bản chất lượng cao đã tự nhiên <= 48.5MB -> Chọn bản nét nhất trong số đó
+                                    # (Gửi trực tiếp 100% gốc không cần nén, ngay cả khi chưa cài ffmpeg vẫn gửi được tức thì)
+                                    fit_formats = [f for f in mp4_formats if 0 < f.get("estimated_size_mb", 0) <= 48.5]
+                                    if fit_formats:
+                                        fit_formats.sort(key=lambda x: (x.get("height", 0), x.get("bitrate", 0)), reverse=True)
+                                        m_url = fit_formats[0]["url"]
+                                    elif duration > 1200:
+                                        # Video siêu dài (> 20 phút): Trần bitrate 48.5MB là ~230kbps
+                                        # Chọn bản 360p/480p (bitrate ~800k, dung lượng ~150-200MB) để nén về 48.5MB trong 2-3 phút
+                                        # Tránh tải 1080p (2.2GB) gây nghẽn mạng và treo CPU Amlogic S905W
+                                        long_formats = [f for f in mp4_formats if f.get("height", 0) <= 480]
+                                        if long_formats:
+                                            long_formats.sort(key=lambda x: (x.get("height", 0), x.get("bitrate", 0)), reverse=True)
+                                            m_url = long_formats[0]["url"]
+                                        else:
+                                            mp4_formats.sort(key=lambda x: (x.get("height", 0), x.get("bitrate", 0)))
+                                            m_url = mp4_formats[0]["url"]
+                                    elif duration > 300:
+                                        # Video vừa (5 - 20 phút): Chọn bản 720p HD (dung lượng ~100-300MB) để nén nét căng
+                                        mid_formats = [f for f in mp4_formats if f.get("height", 0) <= 720]
+                                        if mid_formats:
+                                            mid_formats.sort(key=lambda x: (x.get("height", 0), x.get("bitrate", 0)), reverse=True)
+                                            m_url = mid_formats[0]["url"]
+                                        else:
+                                            mp4_formats.sort(key=lambda x: (x.get("height", 0), x.get("bitrate", 0)), reverse=True)
+                                            m_url = mp4_formats[0]["url"]
+                                    else:
+                                        # Video ngắn (<= 5 phút): Luôn lấy Full HD 1080p cao nhất để giữ trọn vẹn từng chi tiết
+                                        mp4_formats.sort(key=lambda x: (x.get("height", 0), x.get("bitrate", 0)), reverse=True)
+                                        m_url = mp4_formats[0]["url"]
+
+                                # 2. Kiểm tra variants từ Twitter API gốc nếu không có mp4_formats
                                 elif "variants" in item:
                                     variants = [v for v in item["variants"] if v.get("content_type") == "video/mp4" and v.get("url")]
                                     if variants:

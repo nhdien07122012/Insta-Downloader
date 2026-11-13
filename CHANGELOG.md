@@ -4,6 +4,30 @@ Toàn bộ các phiên bản cập nhật, mã bản dựng (build number), chi 
 
 ---
 
+## [v1.4.7 (Build 13)] - 2026-11-13
+- **Commit SHA**: `63aabdc`
+- **Mục tiêu**: Xử lý triệt để bài toán tải và nén video siêu dài (từ 10 đến 30+ phút, ví dụ các clip 29 phút dung lượng gốc 1GB - 2.2GB trên **Twitter (𝕏)**). Bổ sung thuật toán chọn định dạng thông minh theo thời lượng (`estimated_size_mb`), ưu tiên gửi ngay bản gốc nếu tự nhiên <= 48.5MB (không tốn CPU, không cần ffmpeg), chọn nhóm 360p/480p cho video siêu dài để nén về dưới 50MB siêu tốc trong 2 phút (thay vì tải 1080p 2GB gây nghẽn và quá tải CPU), đồng thời kích hoạt preset `veryfast` và timeout động lên đến 2600s trên TX3 Mini.
+- **Chi tiết thay đổi**:
+  - `instagram.py`:
+    - Tối ưu hóa chọn định dạng `mp4_formats` trong `_download_twitter`:
+      - Tính dung lượng ước tính `estimated_size_mb` cho từng format.
+      - Nếu có bản chất lượng cao tự nhiên `<= 48.5MB`: Chọn bản nét nhất để gửi ngay lập tức (zero transcoding, không lo trần 50MB).
+      - Nếu video dài `> 20 phút`: Tự động chọn luồng phân giải hợp lý (360p/480p dung lượng ~150MB thay vì 2.2GB) để nén về dưới 48.5MB trong 2-3 phút, tránh nghẽn băng thông và tránh quá tải CPU Amlogic S905W.
+      - Nếu video ngắn (`<= 5 phút`): Luôn chọn Full HD 1080p gốc cao nhất.
+    - Nâng cấp `compress_video_to_size`:
+      - Kích hoạt `-preset veryfast` cho video dài `> 20 phút` để tăng tốc độ nén x264 gấp 2-3 lần trên chip ARM Cortex-A53.
+      - Tính toán timeout thích ứng theo thời lượng video `timeout_sec = max(600, int(duration * 1.5))`, chống lỗi ngắt timeout trên TX3 Mini.
+  - `ios-photo-app/package.json`: Nâng phiên bản lên `"1.4.7"`.
+  - `ios-photo-app/ios/App/App.xcodeproj/project.pbxproj`: Cập nhật `CURRENT_PROJECT_VERSION = 13;`.
+  - `ios-photo-app/src/components/SettingsModal.tsx`: Cập nhật chân trang hiển thị `InstaPhotos v1.4.7 • Build 13 (Smart Ultra-Long Video Support)`.
+- **Link tải IPA trực tiếp**: [https://github.com/nhdien07122012/Insta-Downloader/releases/latest/download/InstaPhotos.ipa](https://github.com/nhdien07122012/Insta-Downloader/releases/latest/download/InstaPhotos.ipa)
+- **Lệnh hoàn tác mẫu (Rollback)**:
+  ```bash
+  git revert HEAD --no-edit
+  ```
+
+---
+
 ## [v1.4.6 (Build 12)] - 2026-11-13
 - **Commit SHA**: `41e2440`
 - **Mục tiêu**: Nâng cấp chất lượng video toàn diện, loại bỏ hiện tượng mờ/nhòe/vỡ hình khi tải video trên **Twitter (𝕏)** và **Instagram**. Luôn luôn ưu tiên tải bản Full HD 1080p / 720p gốc có bitrate cao nhất từ Twitter CDN (thay vì tải bản 240p/360p pre-render mờ căm), nâng cấp thuật toán nén thông minh với bộ lọc nội suy sắc nét Lanczos (`flags=lanczos`), tự động thích ứng độ phân giải theo bitrate khả dụng và truyền đầy đủ metadata (`width`, `height`, `duration`) khi gửi lên Telegram.
