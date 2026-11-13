@@ -270,14 +270,16 @@ async def handle_instagram_message(update: Update, context: ContextTypes.DEFAULT
                         video=f,
                         caption=caption_storage,
                         parse_mode=ParseMode.HTML,
-                        write_timeout=120.0,
-                        read_timeout=120.0,
+                        supports_streaming=True,
+                        write_timeout=180.0,
+                        read_timeout=180.0,
                     )
-                    file_id = m_sent.video.file_id
-                    file_unique_id = m_sent.video.file_unique_id
-                    file_size = m_sent.video.file_size
-                    width = m_sent.video.width
-                    height = m_sent.video.height
+                    v_obj = m_sent.video or m_sent.animation or m_sent.document
+                    file_id = v_obj.file_id if v_obj else ""
+                    file_unique_id = v_obj.file_unique_id if v_obj else ""
+                    file_size = getattr(v_obj, "file_size", 0) or 0
+                    width = getattr(v_obj, "width", 0) or 0
+                    height = getattr(v_obj, "height", 0) or 0
 
                 sent_messages.append(m_sent)
                 saved_media_records.append({
@@ -306,14 +308,14 @@ async def handle_instagram_message(update: Update, context: ContextTypes.DEFAULT
                     if m["type"] == "photo":
                         media_group.append(InputMediaPhoto(media=fh, caption=cap, parse_mode=pm))
                     else:
-                        media_group.append(InputMediaVideo(media=fh, caption=cap, parse_mode=pm))
+                        media_group.append(InputMediaVideo(media=fh, caption=cap, parse_mode=pm, supports_streaming=True))
 
                 try:
                     msgs = await context.bot.send_media_group(
                         chat_id=destination_chat_id,
                         media=media_group,
-                        write_timeout=120.0,
-                        read_timeout=120.0,
+                        write_timeout=180.0,
+                        read_timeout=180.0,
                     )
                     sent_messages.extend(msgs)
 
@@ -327,15 +329,17 @@ async def handle_instagram_message(update: Update, context: ContextTypes.DEFAULT
                                 "width": m_s.photo[-1].width,
                                 "height": m_s.photo[-1].height,
                             })
-                        elif m_s.video:
-                            saved_media_records.append({
-                                "file_id": m_s.video.file_id,
-                                "file_unique_id": m_s.video.file_unique_id,
-                                "media_type": "video",
-                                "file_size": m_s.video.file_size,
-                                "width": m_s.video.width,
-                                "height": m_s.video.height,
-                            })
+                        else:
+                            v_obj = m_s.video or m_s.animation or m_s.document
+                            if v_obj:
+                                saved_media_records.append({
+                                    "file_id": v_obj.file_id,
+                                    "file_unique_id": v_obj.file_unique_id,
+                                    "media_type": "video",
+                                    "file_size": getattr(v_obj, "file_size", 0) or 0,
+                                    "width": getattr(v_obj, "width", 0) or 0,
+                                    "height": getattr(v_obj, "height", 0) or 0,
+                                })
                 finally:
                     for fh in file_handles:
                         fh.close()

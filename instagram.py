@@ -118,9 +118,16 @@ class InstagramDownloader:
             res["platform"] = "instagram"
             return res
         except Exception as e_yt:
-            print(f"[yt-dlp Error] {e_yt}")
+            print(f"[yt-dlp Error] {e_yt}. Đang thử phương pháp dự phòng Instaloader...")
 
-        # Phương pháp 3: RapidAPI nếu có cấu hình (chỉ cho Instagram)
+        # Phương pháp 3: Instaloader (Chuyên biệt cho Instagram Reels & Video)
+        try:
+            res = self._download_with_instaloader(item_id, target_dir)
+            return res
+        except Exception as e_il:
+            print(f"[Instaloader Error] {e_il}")
+
+        # Phương pháp 4: RapidAPI nếu có cấu hình (chỉ cho Instagram)
         if RAPIDAPI_KEY:
             try:
                 res = self._download_with_rapidapi(clean_url, item_id, target_dir)
@@ -188,12 +195,23 @@ class InstagramDownloader:
                             is_video = m_type in ("video", "gif")
                             m_url = item.get("url")
 
-                            # Nếu video, lấy url có bitrate cao nhất
-                            if is_video and "variants" in item:
-                                variants = [v for v in item["variants"] if v.get("content_type") == "video/mp4"]
-                                if variants:
-                                    variants.sort(key=lambda x: x.get("bitrate", 0), reverse=True)
-                                    m_url = variants[0].get("url", m_url)
+                            # Nếu là video: tìm link video chất lượng cao nhất
+                            if is_video:
+                                # 1. Kiểm tra formats từ FxTwitter (container mp4)
+                                formats = item.get("formats", [])
+                                mp4_formats = [f for f in formats if f.get("container") == "mp4" and f.get("url")]
+                                if mp4_formats:
+                                    mp4_formats.sort(key=lambda x: x.get("bitrate", 0), reverse=True)
+                                    m_url = mp4_formats[0]["url"]
+                                # 2. Kiểm tra variants từ Twitter API gốc
+                                elif "variants" in item:
+                                    variants = [v for v in item["variants"] if v.get("content_type") == "video/mp4" and v.get("url")]
+                                    if variants:
+                                        variants.sort(key=lambda x: x.get("bitrate", 0), reverse=True)
+                                        m_url = variants[0]["url"]
+                                # 3. Nếu m_url rỗng hoặc là playlist .m3u8, dùng redirect trực tiếp MP4
+                                if not m_url or ".m3u8" in str(m_url):
+                                    m_url = f"https://d.fxtwitter.com/i/status/{tweet_id}"
 
                             if not m_url:
                                 continue
@@ -201,16 +219,17 @@ class InstagramDownloader:
                             ext = "mp4" if is_video else "jpg"
                             file_path = target_dir / f"{idx}_{m_type}.{ext}"
 
-                            r_file = requests.get(m_url, headers=headers, timeout=60, stream=True)
+                            r_file = requests.get(m_url, headers=headers, timeout=120, stream=True)
                             if r_file.status_code == 200:
                                 with open(file_path, "wb") as f:
                                     for chunk in r_file.iter_content(chunk_size=65536):
                                         if chunk:
                                             f.write(chunk)
-                                media_files.append({
-                                    "path": str(file_path),
-                                    "type": "video" if is_video else "photo",
-                                })
+                                if file_path.exists() and file_path.stat().st_size > 100:
+                                    media_files.append({
+                                        "path": str(file_path),
+                                        "type": "video" if is_video else "photo",
+                                    })
 
                         if media_files:
                             return {
@@ -326,6 +345,11 @@ class InstagramDownloader:
             "outtmpl": outtmpl,
             "quiet": True,
             "no_warnings": True,
+            "format": "bestvideo+bestaudio/best",
+            "merge_output_format": "mp4",
+            "http_headers": {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            }
         }
         if os.path.exists(COOKIES_FILE):
             ydl_opts["cookiefile"] = COOKIES_FILE
@@ -350,6 +374,41 @@ class InstagramDownloader:
             "url": url,
             "author": author,
             "caption": caption,
+            "media_files": media_files,
+            "target_dir": target_dir,
+        }
+
+    def _download_with_instaloader(self, shortcode: str, target_dir: Path) -> Dict[str, Any]:
+        """Tải bài viết hoặc Reels Instagram bằng Instaloader."""
+        import instaloader
+        L = instaloader.Instaloader(
+            dirname_pattern=str(target_dir),
+            filename_pattern="{target}_{shortcode}",
+            download_video_thumbnails=False,
+            download_geotags=False,
+            download_comments=False,
+            save_metadata=False,
+            compress_json=False,
+        )
+        post = instaloader.Post.from_shortcode(L.context, shortcode)
+        L.download_post(post, target=str(target_dir))
+
+        media_files = []
+        for file in sorted(target_dir.rglob("*.*")):
+            if file.suffix.lower() in [".jpg", ".jpeg", ".png", ".webp"]:
+                media_files.append({"path": str(file), "type": "photo"})
+            elif file.suffix.lower() in [".mp4", ".mov"]:
+                media_files.append({"path": str(file), "type": "video"})
+
+        if not media_files:
+            raise RuntimeError("Instaloader không tìm thấy file media.")
+
+        return {
+            "platform": "instagram",
+            "shortcode": shortcode,
+            "url": f"https://www.instagram.com/p/{shortcode}/",
+            "author": post.owner_username or "",
+            "caption": post.caption or "",
             "media_files": media_files,
             "target_dir": target_dir,
         }

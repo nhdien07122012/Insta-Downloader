@@ -4,6 +4,28 @@ Toàn bộ các phiên bản cập nhật, mã bản dựng (build number), chi 
 
 ---
 
+## [v1.4.4 (Build 10)] - 2026-11-13
+- **Commit SHA**: `0f47f8e`
+- **Mục tiêu**: Nâng cấp toàn diện cơ chế tải và phát video cho cả **Twitter (X)** và **Instagram (Reels / Video)**, hỗ trợ bóc tách video MP4 chất lượng cao nhất (`formats` container mp4, direct redirect `d.fxtwitter.com`), bổ sung phương pháp dự phòng Instaloader cho Instagram và kích hoạt cờ `supports_streaming=True` khi đẩy video lên Telegram.
+- **Chi tiết thay đổi**:
+  - `instagram.py`:
+    - Nâng cấp `_download_twitter`: Hỗ trợ schema `formats` của FxTwitter API, tự động lọc và tải video MP4 có bitrate cao nhất; dự phòng direct video redirect `d.fxtwitter.com` nếu gặp stream `.m3u8`.
+    - Bổ sung `_download_with_instaloader` cho Instagram Reels/Videos khi `gallery-dl` hoặc `yt-dlp` gặp hạn chế xác thực.
+    - Cập nhật cấu hình `yt-dlp` với `format: bestvideo+bestaudio/best`, `merge_output_format: mp4` và Chrome User-Agent.
+  - `bot.py`:
+    - Kích hoạt `supports_streaming=True` cho cả `send_video` và `InputMediaVideo` trong Telegram album.
+    - Xử lý trích xuất an toàn thuộc tính video (`video`, `animation`, `document`) tránh lỗi `AttributeError`.
+  - `ios-photo-app/package.json`: Nâng phiên bản lên `"1.4.4"`.
+  - `ios-photo-app/ios/App/App.xcodeproj/project.pbxproj`: Cập nhật `CURRENT_PROJECT_VERSION = 10;`.
+  - `ios-photo-app/src/components/SettingsModal.tsx`: Cập nhật chân trang hiển thị `InstaPhotos v1.4 • Build 10 (Video Support & Streaming)`.
+- **Link tải IPA trực tiếp**: [https://github.com/nhdien07122012/Insta-Downloader/releases/latest/download/InstaPhotos.ipa](https://github.com/nhdien07122012/Insta-Downloader/releases/latest/download/InstaPhotos.ipa)
+- **Lệnh hoàn tác mẫu (Rollback)**:
+  ```bash
+  git revert HEAD --no-edit
+  ```
+
+---
+
 ## [v1.4.3 (Build 9)] - 2026-11-13
 - **Commit SHA**: `ac179a9`
 - **Mục tiêu**: Bổ sung hỗ trợ tải ảnh từ Twitter Link Card Preview (đối với các bài viết chia sẻ link ngoài như Silzee/GestaltX không có ảnh upload trực tiếp) và cung cấp phản hồi thông báo cụ thể cho bài viết thuần văn bản (Text-only).
