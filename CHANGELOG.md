@@ -5,7 +5,7 @@ Toàn bộ các phiên bản cập nhật, mã bản dựng (build number), chi 
 ---
 
 ## [v1.4.5 (Build 11)] - 2026-11-13
-- **Commit SHA**: `3c45851`
+- **Commit SHA**: `03e85a4`
 - **Mục tiêu**: Khắc phục triệt để lỗi không tải được video dài trên **Twitter (X)**, hỗ trợ bóc tách & tải luồng HLS (`.m3u8`) từ các video dài / X Premium, tự động tính toán bitrate và tích hợp nén thông minh bằng `ffmpeg` để giữ dung lượng video luôn dưới 50MB (phù hợp giới hạn Telegram Bot API), đồng thời nâng mức giới hạn RAM của service systemd trên TX3 Mini từ 150MB lên 500MB và tăng timeout lên 300 giây.
 - **Chi tiết thay đổi**:
   - `instagram.py`:
