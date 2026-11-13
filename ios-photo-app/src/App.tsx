@@ -476,13 +476,13 @@ export const App: React.FC = () => {
         {currentTab === "search" && (
           <div className="p-4 animate-in fade-in duration-200">
             <div className="relative mb-4">
-              <Search className="w-4 h-4 text-neutral-400 absolute left-3.5 top-3" />
+              <Search className="w-4 h-4 text-neutral-400 absolute left-3.5 top-3.5" />
               <input
                 type="text"
                 placeholder="Tìm theo tác giả @username hoặc caption..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full bg-neutral-900 border border-neutral-800 rounded-xl pl-10 pr-4 py-2 text-sm text-white placeholder-neutral-500 focus:outline-none focus:border-blue-500"
+                className="w-full liquid-glass-subtle rounded-2xl pl-10 pr-4 py-2.5 text-sm text-white placeholder-neutral-500 focus:outline-none focus:border-blue-500 transition-colors"
               />
             </div>
             <PhotoGrid
@@ -562,7 +562,7 @@ export const App: React.FC = () => {
                   Bộ sưu tập Album
                 </h2>
 
-                {/* Danh mục đặc biệt */}
+                {/* Danh mục đặc biệt - Apple Liquid Glass Cards */}
                 <div className="grid grid-cols-2 gap-3 mb-6">
                   {/* Mục Yêu Thích */}
                   <div
@@ -570,9 +570,9 @@ export const App: React.FC = () => {
                       setActiveFilter("Yêu thích");
                       setCurrentTab("library");
                     }}
-                    className="bg-neutral-900 border border-neutral-800 rounded-2xl p-4 cursor-pointer active:scale-98 transition-transform"
+                    className="liquid-glass-subtle rounded-3xl p-4 cursor-pointer active:scale-95 transition-transform"
                   >
-                    <div className="w-10 h-10 rounded-xl bg-red-500/20 text-red-500 flex items-center justify-center mb-3">
+                    <div className="w-10 h-10 rounded-2xl liquid-glass-subtle text-red-500 flex items-center justify-center mb-3">
                       <Heart className="w-6 h-6 fill-red-500" />
                     </div>
                     <h3 className="font-semibold text-white">Yêu thích</h3>
@@ -587,9 +587,9 @@ export const App: React.FC = () => {
                       setActiveFilter("Album");
                       setCurrentTab("library");
                     }}
-                    className="bg-neutral-900 border border-neutral-800 rounded-2xl p-4 cursor-pointer active:scale-98 transition-transform"
+                    className="liquid-glass-subtle rounded-3xl p-4 cursor-pointer active:scale-95 transition-transform"
                   >
-                    <div className="w-10 h-10 rounded-xl bg-purple-500/20 text-purple-400 flex items-center justify-center mb-3">
+                    <div className="w-10 h-10 rounded-2xl liquid-glass-subtle text-purple-400 flex items-center justify-center mb-3">
                       <Layers className="w-6 h-6" />
                     </div>
                     <h3 className="font-semibold text-white">Carousels</h3>
@@ -611,7 +611,7 @@ export const App: React.FC = () => {
                     <div
                       key={album.id}
                       onClick={() => setSelectedAlbum(album)}
-                      className="bg-neutral-900 border border-neutral-800 rounded-2xl overflow-hidden cursor-pointer active:scale-98 transition-transform group"
+                      className="liquid-glass-subtle rounded-3xl overflow-hidden cursor-pointer active:scale-95 transition-transform group"
                     >
                       <div className="aspect-square relative overflow-hidden bg-neutral-800">
                         <img
@@ -619,7 +619,7 @@ export const App: React.FC = () => {
                           alt=""
                           className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                         />
-                        <div className="absolute top-2 right-2 bg-black/70 backdrop-blur-md px-2 py-0.5 rounded-full flex items-center gap-1 text-[11px] font-semibold text-white">
+                        <div className="absolute top-2 right-2 liquid-glass-subtle px-2 py-0.5 rounded-full flex items-center gap-1 text-[11px] font-semibold text-white">
                           <Layers className="w-3 h-3 text-blue-400" />
                           <span>{album.photos.length}</span>
                         </div>

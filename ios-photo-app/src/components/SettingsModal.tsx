@@ -166,29 +166,31 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
-      <div className="w-full max-w-md bg-neutral-900 border border-neutral-800 rounded-3xl p-6 shadow-2xl text-white max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between pb-4 border-b border-neutral-800">
+      <div className="w-full max-w-md liquid-glass-modal rounded-3xl p-6 shadow-2xl text-white max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between pb-4 border-b border-white/10">
           <h2 className="text-lg font-bold flex items-center gap-2">
-            <ShieldCheck className="w-5 h-5 text-blue-500" />
+            <span className="w-7 h-7 rounded-xl liquid-glass-subtle flex items-center justify-center">
+              <ShieldCheck className="w-4 h-4 text-blue-400" />
+            </span>
             Cấu hình Telegram MTProto
           </h2>
           <button
             onClick={onClose}
-            className="w-8 h-8 rounded-full bg-neutral-800 flex items-center justify-center text-neutral-400 active:text-white"
+            className="w-8 h-8 rounded-full liquid-glass-lens flex items-center justify-center text-neutral-300 active:scale-90"
           >
             <X className="w-4 h-4" />
           </button>
         </div>
 
-        {/* Switch tab */}
-        <div className="flex bg-neutral-800/80 p-1 rounded-xl mt-4">
+        {/* Switch tab - Apple Liquid Glass Capsule */}
+        <div className="flex liquid-glass-pill-container p-1 rounded-full mt-4">
           <button
             type="button"
             onClick={() => setActiveTab("api")}
-            className={`flex-1 py-1.5 text-xs font-semibold rounded-lg transition-all ${
+            className={`flex-1 py-1.5 text-xs font-semibold rounded-full transition-all duration-200 ${
               activeTab === "api"
-                ? "bg-neutral-700 text-white shadow-sm"
-                : "text-neutral-400"
+                ? "liquid-glass-pill-active"
+                : "text-neutral-400 hover:text-white"
             }`}
           >
             Thông số API
@@ -196,10 +198,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           <button
             type="button"
             onClick={() => setActiveTab("login")}
-            className={`flex-1 py-1.5 text-xs font-semibold rounded-lg transition-all ${
+            className={`flex-1 py-1.5 text-xs font-semibold rounded-full transition-all duration-200 ${
               activeTab === "login"
-                ? "bg-neutral-700 text-white shadow-sm"
-                : "text-neutral-400"
+                ? "liquid-glass-pill-active"
+                : "text-neutral-400 hover:text-white"
             }`}
           >
             Đăng nhập MTProto
@@ -207,7 +209,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         </div>
 
         {statusMsg && (
-          <div className="mt-3 p-2.5 bg-neutral-800 border border-neutral-700 rounded-xl text-xs text-amber-300">
+          <div className="mt-3 p-3 liquid-glass-subtle border border-amber-500/30 rounded-2xl text-xs text-amber-300">
             {statusMsg}
           </div>
         )}
@@ -429,40 +431,42 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           </div>
         )}
 
-        {/* Quản lý Bộ nhớ đệm ảnh (Offline Cache) */}
-        <div className="mt-5 pt-4 border-t border-neutral-850">
-          <div className="flex items-center justify-between mb-2">
-            <div>
-              <h4 className="text-sm font-semibold text-white flex items-center gap-1.5">
-                <Database className="w-4 h-4 text-blue-400" />
-                Bộ nhớ đệm ảnh (Offline)
-              </h4>
-              <p className="text-xs text-neutral-400 mt-0.5">
-                {cacheStats.count > 0
-                  ? `${cacheStats.count} ảnh trong máy (${cacheStats.sizeMB} MB)`
-                  : "Chưa có ảnh nào lưu trong máy"}
-              </p>
+        {/* Quản lý Bộ nhớ đệm ảnh (Offline Cache) - Apple Liquid Glass subtle card */}
+        <div className="mt-5 pt-4 border-t border-white/10">
+          <div className="liquid-glass-subtle p-3.5 rounded-2xl mb-2">
+            <div className="flex items-center justify-between mb-1">
+              <div>
+                <h4 className="text-sm font-semibold text-white flex items-center gap-1.5">
+                  <Database className="w-4 h-4 text-blue-400" />
+                  Bộ nhớ đệm ảnh (Offline)
+                </h4>
+                <p className="text-xs text-neutral-400 mt-0.5">
+                  {cacheStats.count > 0
+                    ? `${cacheStats.count} ảnh trong máy (${cacheStats.sizeMB} MB)`
+                    : "Chưa có ảnh nào lưu trong máy"}
+                </p>
+              </div>
+              {cacheStats.count > 0 && (
+                <button
+                  type="button"
+                  onClick={handleClearCache}
+                  className="px-3 py-1.5 text-xs font-semibold text-red-400 bg-red-950/40 border border-red-800/50 rounded-xl active:bg-red-900/60 transition-colors flex items-center gap-1"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  Xóa cache
+                </button>
+              )}
             </div>
-            {cacheStats.count > 0 && (
-              <button
-                type="button"
-                onClick={handleClearCache}
-                className="px-3 py-1.5 text-xs font-semibold text-red-400 bg-red-950/40 border border-red-800/50 rounded-xl active:bg-red-900/60 transition-colors flex items-center gap-1"
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-                Xóa cache
-              </button>
-            )}
+            <p className="text-[11px] text-neutral-400 leading-relaxed mt-2">
+              Ảnh được lưu trực tiếp trên iPhone để mở ứng dụng xem ngay tức thì mà không cần tải lại từ Telegram.
+            </p>
           </div>
-          <p className="text-[11px] text-neutral-500 leading-relaxed">
-            Ảnh được lưu trực tiếp trên iPhone để mở ứng dụng xem ngay tức thì mà không cần tải lại từ Telegram.
-          </p>
         </div>
 
         {/* Footer App Version & Build */}
-        <div className="pt-4 pb-1 text-center border-t border-neutral-800/80">
-          <p className="text-[11px] text-neutral-500 font-medium">
-            InstaPhotos v1.3 • Build 5
+        <div className="pt-4 pb-1 text-center border-t border-white/10">
+          <p className="text-[11px] text-neutral-400 font-medium">
+            InstaPhotos v2.0 • Build 6 (Liquid Glass Edition)
           </p>
         </div>
       </div>
