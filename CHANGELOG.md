@@ -5,7 +5,7 @@ Toàn bộ các phiên bản cập nhật, mã bản dựng (build number), chi 
 ---
 
 ## [v1.4.8 (Build 14)] - 2026-11-13
-- **Commit SHA**: `66f4e55`
+- **Commit SHA**: `1ce11c5`
 - **Mục tiêu**: Chuyên biệt hóa triệt để bot trên TX3 Mini thành bộ máy lưu trữ **ẢNH (Photos / Carousels / Link Cards)** siêu tốc cho cả **Instagram** và **Twitter (𝕏)** theo yêu cầu của người dùng. Loại bỏ hoàn toàn chức năng tải video và nén video bằng FFmpeg trên TX3 Mini để CPU luôn nhẹ nhàng, mát mẻ (5-7%) và tải ảnh chỉ mất 1-2 giây. Đồng thời **bảo toàn nguyên vẹn 100% tính năng trình phát video HD trên ứng dụng iOS**.
 - **Chi tiết thay đổi**:
   - `instagram.py`:
