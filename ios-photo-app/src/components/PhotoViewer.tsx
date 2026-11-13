@@ -260,10 +260,15 @@ export const PhotoViewer: React.FC<PhotoViewerProps> = ({
     }
   };
 
-  // Tải ảnh về máy iPhone (Hỗ trợ iOS Camera Roll)
+  // Tải ảnh hoặc video về máy iPhone (Hỗ trợ iOS Camera Roll)
   const handleDownload = async (e: React.MouseEvent) => {
     e.stopPropagation();
-    showToast("Đang chuẩn bị ảnh chất lượng cao...");
+    const isVideo = photo.mediaType === "video";
+    const ext = isVideo ? "mp4" : "jpg";
+    const mime = isVideo ? "video/mp4" : "image/jpeg";
+    const platformPrefix = photo.platform === "twitter" ? "twitter" : "instagram";
+
+    showToast(isVideo ? "Đang chuẩn bị video chất lượng cao..." : "Đang chuẩn bị ảnh chất lượng cao...");
 
     try {
       const targetUrl = hdUrl || photo.url;
@@ -271,17 +276,17 @@ export const PhotoViewer: React.FC<PhotoViewerProps> = ({
       const blob = await res.blob();
       const file = new File(
         [blob],
-        `instagram_${photo.author || "photo"}_${Date.now()}.jpg`,
-        { type: "image/jpeg" }
+        `${platformPrefix}_${photo.author || (isVideo ? "video" : "photo")}_${Date.now()}.${ext}`,
+        { type: mime }
       );
 
-      // Cách 1: Native Web Share File (Mở menu iOS chứa nút 'Lưu hình ảnh' vào Thư viện)
+      // Cách 1: Native Web Share File (Mở menu iOS chứa nút 'Lưu video' hoặc 'Lưu hình ảnh' vào Thư viện)
       if (navigator.canShare && navigator.canShare({ files: [file] })) {
         await navigator.share({
           files: [file],
-          title: "Lưu vào Thư viện ảnh",
+          title: isVideo ? "Lưu video vào Thư viện" : "Lưu vào Thư viện ảnh",
         });
-        showToast("👉 Chọn 'Lưu hình ảnh' để lưu vào Thư viện iPhone");
+        showToast(isVideo ? "👉 Chọn 'Lưu video' để lưu vào Thư viện iPhone" : "👉 Chọn 'Lưu hình ảnh' để lưu vào Thư viện iPhone");
         return;
       }
     } catch (err: any) {
@@ -294,35 +299,39 @@ export const PhotoViewer: React.FC<PhotoViewerProps> = ({
     try {
       const a = document.createElement("a");
       a.href = hdUrl || photo.url;
-      a.download = `instagram_${photo.author || "photo"}_${Date.now()}.jpg`;
+      a.download = `${platformPrefix}_${photo.author || (isVideo ? "video" : "photo")}_${Date.now()}.${ext}`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
-      showToast("Đã tải ảnh về máy");
+      showToast(isVideo ? "Đã tải video về máy" : "Đã tải ảnh về máy");
     } catch {
-      showToast("Mẹo: Nhấn giữ vào ảnh và chọn 'Lưu vào Ảnh'");
+      showToast(isVideo ? "Mẹo: Mở video và chọn 'Lưu video'" : "Mẹo: Nhấn giữ vào ảnh và chọn 'Lưu vào Ảnh'");
     }
   };
 
-  // Chia sẻ ảnh (Native iOS Share Sheet)
+  // Chia sẻ ảnh/video (Native iOS Share Sheet)
   const handleShare = async (e: React.MouseEvent) => {
     e.stopPropagation();
+    const isVideo = photo.mediaType === "video";
+    const ext = isVideo ? "mp4" : "jpg";
+    const mime = isVideo ? "video/mp4" : "image/jpeg";
+    const platformName = photo.platform === "twitter" ? "Twitter (X)" : "Instagram";
 
-    // 1. Chia sẻ File ảnh qua Web Share API
+    // 1. Chia sẻ File qua Web Share API
     try {
       const targetUrl = hdUrl || photo.url;
       const res = await fetch(targetUrl);
       const blob = await res.blob();
       const file = new File(
         [blob],
-        `instagram_${photo.author || "photo"}.jpg`,
-        { type: "image/jpeg" }
+        `${photo.platform || "media"}_${photo.author || "file"}.${ext}`,
+        { type: mime }
       );
 
       if (navigator.canShare && navigator.canShare({ files: [file] })) {
         await navigator.share({
           files: [file],
-          title: `Ảnh từ @${photo.author || "Instagram"}`,
+          title: `${isVideo ? "Video" : "Ảnh"} từ @${photo.author || platformName}`,
           text: photo.caption,
         });
         return;
@@ -332,10 +341,10 @@ export const PhotoViewer: React.FC<PhotoViewerProps> = ({
     // 2. Chia sẻ link qua Capacitor Native Share
     try {
       await Share.share({
-        title: `Ảnh từ @${photo.author || "Instagram"}`,
-        text: photo.caption || "Ảnh từ Instagram",
+        title: `${isVideo ? "Video" : "Ảnh"} từ @${photo.author || platformName}`,
+        text: photo.caption || `${isVideo ? "Video" : "Ảnh"} từ ${platformName}`,
         url: photo.originalUrl || undefined,
-        dialogTitle: "Chia sẻ ảnh",
+        dialogTitle: `Chia sẻ ${isVideo ? "video" : "ảnh"}`,
       });
       return;
     } catch {}
@@ -394,7 +403,7 @@ export const PhotoViewer: React.FC<PhotoViewerProps> = ({
         </button>
       </div>
 
-      {/* Main Photo Center Container with Pinch to Zoom */}
+      {/* Main Photo/Video Center Container with Pinch to Zoom */}
       <div
         ref={containerRef}
         onClick={() => {
@@ -405,16 +414,37 @@ export const PhotoViewer: React.FC<PhotoViewerProps> = ({
         onTouchEnd={handleTouchEnd}
         className="relative flex-1 flex items-center justify-center overflow-hidden cursor-pointer touch-none"
       >
-        <img
-          src={hdUrl || photo.url}
-          alt={photo.caption || "Fullscreen view"}
-          style={{
-            transform: `scale(${scale}) translate(${(position.x + swipeOffset) / scale}px, ${position.y / scale}px)`,
-            transition: isGesturing ? "none" : "transform 0.25s cubic-bezier(0.2, 0, 0, 1)",
-            WebkitTouchCallout: "default",
-          }}
-          className="max-w-full max-h-full object-contain pointer-events-auto select-none"
-        />
+        {photo.mediaType === "video" ? (
+          <div
+            className="w-full h-full flex items-center justify-center p-2"
+            style={{
+              transform: `translate(${swipeOffset}px, 0px)`,
+              transition: isGesturing ? "none" : "transform 0.25s cubic-bezier(0.2, 0, 0, 1)",
+            }}
+          >
+            <video
+              key={hdUrl || photo.url}
+              src={hdUrl || photo.url}
+              poster={photo.thumbnailUrl}
+              controls
+              playsInline
+              autoPlay
+              preload="metadata"
+              className="max-w-full max-h-[80vh] rounded-2xl object-contain shadow-2xl pointer-events-auto"
+            />
+          </div>
+        ) : (
+          <img
+            src={hdUrl || photo.url}
+            alt={photo.caption || "Fullscreen view"}
+            style={{
+              transform: `scale(${scale}) translate(${(position.x + swipeOffset) / scale}px, ${position.y / scale}px)`,
+              transition: isGesturing ? "none" : "transform 0.25s cubic-bezier(0.2, 0, 0, 1)",
+              WebkitTouchCallout: "default",
+            }}
+            className="max-w-full max-h-full object-contain pointer-events-auto select-none"
+          />
+        )}
 
         {loadingHd && (
           <div className="absolute top-24 right-4 bg-black/60 border border-neutral-700/60 backdrop-blur-md px-3 py-1.5 rounded-full flex items-center gap-2 text-xs text-neutral-300 pointer-events-none">
@@ -524,7 +554,10 @@ export const PhotoViewer: React.FC<PhotoViewerProps> = ({
           className="absolute inset-x-0 bottom-0 z-40 bg-neutral-900/95 backdrop-blur-2xl rounded-t-3xl p-6 border-t border-neutral-800 text-white max-h-[75vh] overflow-y-auto animate-in slide-in-from-bottom duration-300"
         >
           <div className="flex items-center justify-between pb-4 border-b border-neutral-800">
-            <h3 className="text-lg font-bold">Chi tiết ảnh Instagram</h3>
+            <h3 className="text-lg font-bold">
+              {photo.mediaType === "video" ? "Chi tiết Video" : "Chi tiết ảnh"}{" "}
+              {photo.platform === "twitter" ? "Twitter (X)" : "Instagram"}
+            </h3>
             <button
               onClick={() => setShowInfo(false)}
               className="w-8 h-8 rounded-full bg-neutral-800 flex items-center justify-center text-neutral-400 active:text-white"
@@ -536,7 +569,9 @@ export const PhotoViewer: React.FC<PhotoViewerProps> = ({
           <div className="space-y-4 pt-4 text-sm">
             {photo.author && (
               <div>
-                <p className="text-neutral-400 text-xs">Tác giả Instagram</p>
+                <p className="text-neutral-400 text-xs">
+                  Tác giả {photo.platform === "twitter" ? "Twitter (X)" : "Instagram"}
+                </p>
                 <p className="font-semibold text-blue-400">@{photo.author}</p>
               </div>
             )}
@@ -576,9 +611,15 @@ export const PhotoViewer: React.FC<PhotoViewerProps> = ({
                   href={photo.originalUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="w-full py-3 bg-gradient-to-r from-pink-600 to-purple-600 rounded-xl font-medium text-white text-xs flex items-center justify-center gap-1.5 active:opacity-80 shadow-md"
+                  className={`w-full py-3 rounded-xl font-medium text-white text-xs flex items-center justify-center gap-1.5 active:opacity-80 shadow-md ${
+                    photo.platform === "twitter"
+                      ? "bg-neutral-800 hover:bg-neutral-700 border border-neutral-700"
+                      : "bg-gradient-to-r from-pink-600 to-purple-600"
+                  }`}
                 >
-                  <span>Mở bài viết gốc trên Instagram</span>
+                  <span>
+                    Mở bài viết gốc trên {photo.platform === "twitter" ? "Twitter (X)" : "Instagram"}
+                  </span>
                   <ExternalLink className="w-3.5 h-3.5" />
                 </a>
               </div>

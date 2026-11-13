@@ -19,7 +19,7 @@ export const Header: React.FC<HeaderProps> = ({
       <div className="flex items-center justify-between px-4 h-12">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-white flex items-center gap-2">
-            Ảnh
+            Ảnh & Video
             <span className="text-xs font-normal text-neutral-400 bg-neutral-800 px-2 py-0.5 rounded-full">
               {photoCount}
             </span>
@@ -40,7 +40,7 @@ export const Header: React.FC<HeaderProps> = ({
       {/* iOS Segmented Control */}
       <div className="px-4 pb-2">
         <div className="flex p-1 bg-neutral-900/90 rounded-lg text-xs font-medium text-neutral-400 overflow-x-auto scrollbar-none">
-          {["Tất cả", "Hôm nay", "Tuần này", "Yêu thích", "Album"].map((tab) => (
+          {["Tất cả", "Video", "Hôm nay", "Tuần này", "Yêu thích", "Album"].map((tab) => (
             <button
               key={tab}
               onClick={() => onFilterChange(tab)}
@@ -50,7 +50,7 @@ export const Header: React.FC<HeaderProps> = ({
                   : "hover:text-neutral-200"
               }`}
             >
-              {tab === "Yêu thích" ? "❤️ " + tab : tab}
+              {tab === "Yêu thích" ? "❤️ " + tab : tab === "Video" ? "🎬 " + tab : tab}
             </button>
           ))}
         </div>

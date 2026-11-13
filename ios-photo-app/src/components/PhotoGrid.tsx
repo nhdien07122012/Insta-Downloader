@@ -1,10 +1,17 @@
 import React from "react";
 import type { PhotoItem, DateGroup } from "../types";
-import { Layers } from "lucide-react";
+import { Layers, Play } from "lucide-react";
 
 interface PhotoGridProps {
   groups: DateGroup[];
   onSelectPhoto: (photo: PhotoItem) => void;
+}
+
+function formatDuration(sec?: number): string {
+  if (!sec || sec <= 0) return "";
+  const m = Math.floor(sec / 60);
+  const s = sec % 60;
+  return `${m}:${s < 10 ? "0" : ""}${s}`;
 }
 
 export const PhotoGrid: React.FC<PhotoGridProps> = ({
@@ -55,6 +62,14 @@ export const PhotoGrid: React.FC<PhotoGridProps> = ({
                 {photo.isCarousel && (
                   <div className="absolute top-1.5 right-1.5 p-1 rounded-md bg-black/60 backdrop-blur-sm text-white">
                     <Layers className="w-3.5 h-3.5" />
+                  </div>
+                )}
+
+                {/* Badge Video chuẩn Apple Photos (Icon Play & Thời lượng) */}
+                {photo.mediaType === "video" && (
+                  <div className="absolute bottom-1 right-1 px-1.5 py-0.5 rounded-md bg-black/70 backdrop-blur-sm text-white flex items-center gap-1 text-[10px] font-semibold tracking-tight shadow">
+                    <Play className="w-2.5 h-2.5 fill-white text-white" />
+                    {photo.duration ? <span>{formatDuration(photo.duration)}</span> : null}
                   </div>
                 )}
               </div>

@@ -54,13 +54,13 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     first_name = html.escape(user.first_name) if user else "bạn"
     text = (
         f"Xin chào <b>{first_name}</b>! 👋\n\n"
-        "📸 <b>Instagram Cloud Storage Bot</b> giúp bạn:\n"
-        "• Tải toàn bộ ảnh, album (carousel), reels từ Instagram về chất lượng cao nhất.\n"
+        "📸 <b>Media Cloud Storage Bot (Instagram & Twitter/X)</b> giúp bạn:\n"
+        "• Tải toàn bộ ảnh, video, reels và album (carousel) từ Instagram & Twitter/X với chất lượng gốc.\n"
         "• Tự động sao lưu và đẩy lên <b>Kênh Telegram Lưu Trữ</b> (đóng vai trò như Cloud không giới hạn).\n"
-        "• Quản lý metadata và sẵn sàng kết nối với App trên iPhone.\n\n"
+        "• Quản lý metadata và xem ảnh/video trực tiếp trên App iPhone.\n\n"
         "🚀 <b>Cách sử dụng:</b>\n"
-        "• Cách 1: Gửi hoặc bấm <b>Chia sẻ</b> link Instagram vào khung chat này với Bot!\n"
-        "• Cách 2: Dán link Instagram thẳng vào Kênh lưu trữ của bạn (Bot sẽ tự cào và thay thế bằng album ảnh gốc).\n\n"
+        "• Cách 1: Gửi hoặc bấm <b>Chia sẻ</b> link Instagram hoặc Twitter/X vào khung chat này với Bot!\n"
+        "• Cách 2: Dán link thẳng vào Kênh lưu trữ của bạn (Bot sẽ tự cào và thay thế bằng ảnh/video gốc).\n\n"
         "Các lệnh hữu ích:\n"
         "/recent - Xem các bài viết đã lưu gần đây\n"
         "/stats - Thống kê kho ảnh lưu trữ\n"
@@ -176,15 +176,18 @@ async def handle_instagram_message(update: Update, context: ContextTypes.DEFAULT
     status_msg = None
     if not is_channel:
         status_msg = await msg.reply_text(
-            "⏳ <b>Đang lấy ảnh chất lượng cao từ Instagram...</b>",
+            "⏳ <b>Đang lấy media chất lượng cao từ liên kết...</b>",
             parse_mode=ParseMode.HTML,
         )
 
     download_result = None
     try:
-        # 1. Tải ảnh từ Instagram
+        # 1. Tải ảnh/video từ Instagram hoặc Twitter/X
         download_result = await downloader.download_post(text)
         media_files = download_result["media_files"]
+        platform = download_result.get("platform", "instagram")
+        platform_name = "Twitter (X)" if platform == "twitter" else "Instagram"
+        platform_icon = "🐦" if platform == "twitter" else "📸"
 
         # Xóa ngay tin nhắn chứa link sau khi đã tải ảnh về máy thành công
         # Đảm bảo tin nhắn link biến mất ngay lập tức, không phụ thuộc vào thời gian upload
@@ -197,7 +200,7 @@ async def handle_instagram_message(update: Update, context: ContextTypes.DEFAULT
 
         if status_msg:
             await status_msg.edit_text(
-                f"⏳ Đã tải xong <b>{len(media_files)}</b> tệp. Đang đẩy lên Kênh lưu trữ Telegram...",
+                f"⏳ Đã tải xong <b>{len(media_files)}</b> tệp từ {platform_name}. Đang đẩy lên Kênh lưu trữ Telegram...",
                 parse_mode=ParseMode.HTML,
             )
 
@@ -217,9 +220,9 @@ async def handle_instagram_message(update: Update, context: ContextTypes.DEFAULT
             raw_caption = raw_caption[:400] + "..."
 
         caption_storage = (
-            f"📸 <b>Instagram Lưu Trữ</b>\n"
+            f"{platform_icon} <b>{platform_name} Lưu Trữ</b>\n"
             f"{author_text}"
-            f"🔗 <a href='{download_result['url']}'>Xem trên Instagram</a>\n"
+            f"🔗 <a href='{download_result['url']}'>Xem trên {platform_name}</a>\n"
             f"📁 Số lượng: {len(media_files)} tệp\n\n"
             f"<i>{html.escape(raw_caption)}</i>"
         )
@@ -410,8 +413,12 @@ def create_bot_application() -> Application:
     app.add_handler(CommandHandler("recent", recent_command))
     app.add_handler(CommandHandler("status", status_command))
 
-    # Đăng ký message handler nhận link Instagram (cả tin nhắn thường và tin trong channel)
-    insta_filter = (filters.TEXT | filters.CAPTION) & (~filters.COMMAND) & filters.Regex(r"instagram\.com")
-    app.add_handler(MessageHandler(insta_filter, handle_instagram_message))
+    # Đăng ký message handler nhận link Instagram & Twitter/X (cả tin nhắn thường và tin trong channel)
+    media_filter = (
+        (filters.TEXT | filters.CAPTION)
+        & (~filters.COMMAND)
+        & filters.Regex(r"(instagram\.com|twitter\.com|x\.com)")
+    )
+    app.add_handler(MessageHandler(media_filter, handle_instagram_message))
 
     return app

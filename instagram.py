@@ -22,12 +22,45 @@ INSTA_URL_PATTERN = re.compile(
     re.IGNORECASE,
 )
 
+# Regex tìm kiếm link Twitter / X (tweet hoặc status)
+TWITTER_URL_PATTERN = re.compile(
+    r"https?://(?:www\.|mobile\.)?(?:twitter|x)\.com/(?:#!/)?([a-zA-Z0-9_]+)/status(?:es)?/(\d+)",
+    re.IGNORECASE,
+)
+
+
+def extract_media_target(url_or_text: str) -> Optional[Dict[str, Any]]:
+    """Trích xuất thông tin bài viết từ link Instagram hoặc Twitter/X."""
+    # 1. Kiểm tra link Instagram
+    insta_match = INSTA_URL_PATTERN.search(url_or_text)
+    if insta_match:
+        shortcode = insta_match.group(1)
+        return {
+            "platform": "instagram",
+            "id": shortcode,
+            "url": f"https://www.instagram.com/p/{shortcode}/",
+        }
+
+    # 2. Kiểm tra link Twitter / X
+    tw_match = TWITTER_URL_PATTERN.search(url_or_text)
+    if tw_match:
+        username = tw_match.group(1)
+        tweet_id = tw_match.group(2)
+        return {
+            "platform": "twitter",
+            "id": tweet_id,
+            "username": username,
+            "url": f"https://x.com/{username}/status/{tweet_id}",
+        }
+
+    return None
+
 
 def extract_shortcode(url_or_text: str) -> Optional[str]:
-    """Trích xuất shortcode từ link Instagram."""
-    match = INSTA_URL_PATTERN.search(url_or_text)
-    if match:
-        return match.group(1)
+    """Trích xuất mã bài viết từ Instagram hoặc Twitter/X (tương thích ngược hoàn toàn)."""
+    target = extract_media_target(url_or_text)
+    if target:
+        return target["id"]
     return None
 
 
@@ -37,45 +70,54 @@ class InstagramDownloader:
 
     async def download_post(self, url: str) -> Dict[str, Any]:
         """
-        Tải post / carousel / reel từ Instagram.
+        Tải post / carousel / reel từ Instagram hoặc tweet/video từ Twitter (X).
         Chạy trong thread executor để không block asyncio loop.
         """
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(None, self._download_sync, url)
 
     def _download_sync(self, url: str) -> Dict[str, Any]:
-        shortcode = extract_shortcode(url)
-        if not shortcode:
-            raise ValueError("Đường dẫn Instagram không hợp lệ. Hãy kiểm tra lại link.")
+        target = extract_media_target(url)
+        if not target:
+            raise ValueError("Đường dẫn không hợp lệ. Vui lòng gửi link bài viết Instagram hoặc Twitter/X.")
 
-        target_dir = DOWNLOAD_DIR / shortcode
+        platform = target["platform"]
+        item_id = target["id"]
+        target_dir = DOWNLOAD_DIR / f"{platform}_{item_id}"
         target_dir.mkdir(parents=True, exist_ok=True)
 
-        clean_url = f"https://www.instagram.com/p/{shortcode}/"
+        clean_url = target["url"]
 
-        # Phương pháp 1: gallery-dl (Tối ưu nhất cho ảnh, album/carousel và video Instagram)
+        # Phương pháp 1: gallery-dl (Tối ưu nhất cho ảnh, album/carousel và video Instagram/Twitter)
         try:
-            return self._download_with_gallery_dl(clean_url, shortcode, target_dir)
+            res = self._download_with_gallery_dl(clean_url, item_id, target_dir)
+            res["platform"] = platform
+            return res
         except Exception as e_gdl:
-            print(f"[gallery-dl Error] {e_gdl}. Đang thử phương pháp dự phòng...")
+            print(f"[gallery-dl Error] {e_gdl}. Đang thử phương pháp dự phòng yt-dlp...")
 
-        # Phương pháp 2: yt-dlp (Tốt cho Reels và Video)
+        # Phương pháp 2: yt-dlp (Tốt cho Reels và Video Twitter/Instagram)
         try:
-            return self._download_with_ytdlp(clean_url, shortcode, target_dir)
+            res = self._download_with_ytdlp(clean_url, item_id, target_dir)
+            res["platform"] = platform
+            return res
         except Exception as e_yt:
             print(f"[yt-dlp Error] {e_yt}")
 
-        # Phương pháp 3: RapidAPI nếu có cấu hình
-        if RAPIDAPI_KEY:
+        # Phương pháp 3: RapidAPI nếu có cấu hình (chỉ cho Instagram)
+        if platform == "instagram" and RAPIDAPI_KEY:
             try:
-                return self._download_with_rapidapi(clean_url, shortcode, target_dir)
+                res = self._download_with_rapidapi(clean_url, item_id, target_dir)
+                res["platform"] = platform
+                return res
             except Exception as e_api:
                 print(f"[RapidAPI Error] {e_api}")
 
         # Nếu tất cả đều thất bại
+        platform_name = "Twitter (X)" if platform == "twitter" else "Instagram"
         raise RuntimeError(
-            "Không thể tải ảnh từ Instagram. "
-            "Vui lòng kiểm tra lại file 'cookies.txt' để đảm bảo cookie Instagram vẫn còn hạn."
+            f"Không thể tải media từ {platform_name}. "
+            "Vui lòng kiểm tra lại liên kết hoặc file 'cookies.txt'."
         )
 
     def _download_with_gallery_dl(self, url: str, shortcode: str, target_dir: Path) -> Dict[str, Any]:
@@ -99,8 +141,18 @@ class InstagramDownloader:
                 for item in data:
                     if isinstance(item, list) and len(item) >= 2 and item[0] == 2:
                         meta = item[1]
-                        author = meta.get("username", "") or meta.get("fullname", "")
-                        caption = meta.get("description", "") or ""
+                        author = (
+                            meta.get("username", "")
+                            or meta.get("user", {}).get("screen_name", "")
+                            or meta.get("author", {}).get("name", "")
+                            or meta.get("fullname", "")
+                        )
+                        caption = (
+                            meta.get("description", "")
+                            or meta.get("content", "")
+                            or meta.get("tweet-text", "")
+                            or ""
+                        )
                         break
             except Exception as e:
                 print(f"[Warning] Parse metadata gallery-dl error: {e}")

@@ -37,30 +37,38 @@ export function saveStoredConfig(config: TelegramConfig) {
 }
 
 /**
- * Trích xuất tác giả và caption từ nội dung tin nhắn bot đã đăng
+ * Trích xuất tác giả và caption từ nội dung tin nhắn bot đã đăng (Instagram & Twitter/X)
  */
 function parseCaptionAndAuthor(text: string) {
   let author = "";
   let caption = "";
   let originalUrl = "";
+  let platform: "instagram" | "twitter" = "instagram";
 
   const authorMatch = text.match(/Tác giả:\s*@?([a-zA-Z0-9._]+)/i);
   if (authorMatch) author = authorMatch[1];
 
-  const urlMatch = text.match(/https?:\/\/(?:www\.)?instagram\.com\/[^\s<>"]+/i);
-  if (urlMatch) originalUrl = urlMatch[0];
+  const urlMatch = text.match(
+    /https?:\/\/(?:www\.|mobile\.)?(?:instagram\.com|twitter\.com|x\.com)\/[^\s<>"]+/i
+  );
+  if (urlMatch) {
+    originalUrl = urlMatch[0];
+    if (originalUrl.includes("twitter.com") || originalUrl.includes("x.com")) {
+      platform = "twitter";
+    }
+  }
 
   const lines = text.split("\n");
   const captionLines = lines.filter(
     (l) =>
-      !l.includes("Instagram Lưu Trữ") &&
+      !l.includes("Lưu Trữ") &&
       !l.includes("Tác giả:") &&
-      !l.includes("Xem trên Instagram") &&
+      !l.includes("Xem trên") &&
       !l.includes("Số lượng:")
   );
   caption = captionLines.join(" ").trim();
 
-  return { author, caption, originalUrl };
+  return { author, caption, originalUrl, platform };
 }
 
 /**
@@ -123,24 +131,29 @@ export const SAMPLE_PHOTOS: PhotoItem[] = [
   {
     id: "sample-5",
     messageId: 105,
-    url: "https://images.unsplash.com/photo-1511765224389-37f0e77cf0eb?auto=format&fit=crop&w=1200&q=85",
-    thumbnailUrl: "https://images.unsplash.com/photo-1511765224389-37f0e77cf0eb?auto=format&fit=crop&w=400&q=80",
-    author: "travel.gram",
-    caption: "Sunset over the coastal cliff edge.",
-    originalUrl: "https://www.instagram.com/",
+    url: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4",
+    thumbnailUrl: "https://images.unsplash.com/photo-1518709268805-4e9042af9f23?auto=format&fit=crop&w=400&q=80",
+    author: "tech_insider",
+    caption: "Cinematic drone capture of night city lights 🔥 (Video MP4)",
+    originalUrl: "https://x.com/tech_insider/status/1789012345678901234",
     date: new Date(Date.now() - 86400000 * 2), // 2 ngày trước
     isCarousel: false,
+    mediaType: "video",
+    duration: 15,
+    platform: "twitter",
   },
   {
     id: "sample-6",
     messageId: 106,
     url: "https://images.unsplash.com/photo-1492691527719-9d1e07e534b4?auto=format&fit=crop&w=1200&q=85",
     thumbnailUrl: "https://images.unsplash.com/photo-1492691527719-9d1e07e534b4?auto=format&fit=crop&w=400&q=80",
-    author: "street.photography",
-    caption: "Rainy streets reflection.",
-    originalUrl: "https://www.instagram.com/",
+    author: "x_creator",
+    caption: "Rainy streets reflection aesthetic on Twitter (X).",
+    originalUrl: "https://x.com/x_creator/status/1789012345678901235",
     date: new Date(Date.now() - 86400000 * 3),
     isCarousel: false,
+    mediaType: "photo",
+    platform: "twitter",
   },
 ];
 
@@ -306,20 +319,41 @@ export async function fetchChannelPhotos(
     // 2. Lấy danh sách tin nhắn mới từ Telegram
     const messages = await client.getMessages(targetPeer, { limit });
 
-    // 3. Tải thumbnail CHO CÁC TIN NHẮN MỚI CHƯA CÓ TRONG CACHE
+    // 3. Tải thumbnail CHO CÁC TIN NHẮN MỚI CHƯA CÓ TRONG CACHE (cả Ảnh và Video)
     for (const msg of messages) {
-      if (!msg.media || !msg.media.photo) continue;
+      if (!msg.media) continue;
+
+      const isPhoto = !!msg.media.photo;
+      const isVideo = !!(
+        msg.media.document &&
+        (msg.media.document.mimeType?.startsWith("video/") ||
+          msg.media.document.attributes?.some(
+            (a: any) => a.className === "DocumentAttributeVideo"
+          ))
+      );
+
+      if (!isPhoto && !isVideo) continue;
+
+      let duration = 0;
+      if (isVideo && msg.media.document?.attributes) {
+        const videoAttr = msg.media.document.attributes.find(
+          (a: any) => a.className === "DocumentAttributeVideo"
+        );
+        if (videoAttr && videoAttr.duration) {
+          duration = Math.round(videoAttr.duration);
+        }
+      }
 
       // Nếu đã có trong IndexedDB, bỏ qua không tải lại
       if (cachedIds.has(msg.id)) continue;
 
-      const { author, caption, originalUrl } = parseCaptionAndAuthor(
+      const { author, caption, originalUrl, platform } = parseCaptionAndAuthor(
         msg.message || ""
       );
 
       try {
-        // Tải thumbnail sắc nét (thumb: 2 ~800px) cho Retina màn hình iPhone
-        const buffer = await client.downloadMedia(msg.media, { thumb: 2 });
+        // Tải thumbnail sắc nét (thumb: 1 hoặc 2) cho Retina màn hình iPhone
+        const buffer = await client.downloadMedia(msg.media, { thumb: isVideo ? 1 : 2 });
         if (buffer) {
           await savePhotoToCache({
             messageId: msg.id,
@@ -331,6 +365,9 @@ export async function fetchChannelPhotos(
             groupedId: msg.groupedId ? String(msg.groupedId) : undefined,
             timestamp: msg.date * 1000,
             isCarousel: msg.groupedId != null,
+            mediaType: isVideo ? "video" : "photo",
+            duration,
+            platform,
           });
           cachedIds.add(msg.id);
         }
@@ -354,7 +391,7 @@ export async function fetchChannelPhotos(
 }
 
 /**
- * Tải ảnh gốc độ phân giải cao nhất (HD Full Resolution) từ Telegram CDN hoặc IndexedDB
+ * Tải ảnh hoặc video gốc độ phân giải cao nhất (HD Full Resolution) từ Telegram CDN hoặc IndexedDB
  */
 export async function fetchFullResolutionPhoto(
   config: TelegramConfig,
@@ -377,15 +414,24 @@ export async function fetchFullResolutionPhoto(
 
     const messages = await client.getMessages(targetPeer, { ids: [messageId] });
     if (messages && messages[0] && messages[0].media) {
-      // Tải ảnh nguyên bản không nén (100% gốc HD/4K)
+      const isVideo = !!(
+        messages[0].media.document &&
+        (messages[0].media.document.mimeType?.startsWith("video/") ||
+          messages[0].media.document.attributes?.some(
+            (a: any) => a.className === "DocumentAttributeVideo"
+          ))
+      );
+      const mimeType = isVideo ? "video/mp4" : "image/jpeg";
+
+      // Tải media nguyên bản không nén (100% gốc HD/4K/MP4)
       const buffer = await client.downloadMedia(messages[0].media);
       if (buffer) {
-        const hdUrl = await saveHdPhotoToCache(messageId, buffer);
+        const hdUrl = await saveHdPhotoToCache(messageId, buffer, mimeType);
         return hdUrl;
       }
     }
   } catch (err) {
-    console.warn(`Lỗi tải ảnh gốc tin nhắn ${messageId}:`, err);
+    console.warn(`Lỗi tải media gốc tin nhắn ${messageId}:`, err);
   }
   return null;
 }
@@ -412,6 +458,8 @@ export async function sendInstagramLinkToChannel(
   await client.sendMessage(targetPeer, { message: url.trim() });
   return true;
 }
+
+export const sendMediaLinkToChannel = sendInstagramLinkToChannel;
 
 /**
  * Xóa tin nhắn ảnh vĩnh viễn trên Kênh Telegram

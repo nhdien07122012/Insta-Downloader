@@ -68,8 +68,11 @@ export const AddPhotoModal: React.FC<AddPhotoModalProps> = ({
       return;
     }
 
-    if (!url.includes("instagram.com")) {
-      setErrorMsg("Liên kết không hợp lệ. Phải là liên kết bài viết Instagram.");
+    const isInsta = url.includes("instagram.com");
+    const isTwitter = url.includes("twitter.com") || url.includes("x.com");
+
+    if (!isInsta && !isTwitter) {
+      setErrorMsg("Liên kết không hợp lệ. Vui lòng nhập link bài viết Instagram hoặc Twitter/X.");
       return;
     }
 
@@ -77,19 +80,21 @@ export const AddPhotoModal: React.FC<AddPhotoModalProps> = ({
     setErrorMsg("");
     setSuccess(false);
 
+    const platformName = isTwitter ? "Twitter (X)" : "Instagram";
+
     try {
       // Bước 1: Gửi link đến Kênh Telegram qua MTProto
       setStepText("Đang gửi liên kết đến Kênh Telegram...");
       await sendInstagramLinkToChannel(config, url.trim());
 
       // Bước 2: Chờ bot TX3 Mini xử lý tải ảnh & đẩy ảnh lên kênh
-      setStepText("🤖 Bot TX3 Mini đang trích xuất ảnh chất lượng cao...");
+      setStepText(`🤖 Bot TX3 Mini đang trích xuất media từ ${platformName}...`);
       await new Promise((r) => setTimeout(r, 4000));
 
-      setStepText("🚀 Đang đẩy ảnh HD vào Kho lưu trữ...");
+      setStepText("🚀 Đang đẩy ảnh/video gốc vào Kho lưu trữ...");
       await new Promise((r) => setTimeout(r, 3000));
 
-      setStepText("✅ Đã hoàn tất! Đang làm mới thư viện ảnh...");
+      setStepText("✅ Đã hoàn tất! Đang làm mới thư viện...");
       setSuccess(true);
 
       // Bước 3: Tự động refresh thư viện
@@ -116,7 +121,7 @@ export const AddPhotoModal: React.FC<AddPhotoModalProps> = ({
             <span className="w-7 h-7 rounded-lg bg-gradient-to-tr from-yellow-400 via-pink-500 to-purple-600 flex items-center justify-center">
               <Plus className="w-4 h-4 text-white" />
             </span>
-            Tải Ảnh Từ Instagram
+            Tải Ảnh & Video (Insta / X)
           </h2>
           <button
             onClick={onClose}
@@ -128,7 +133,7 @@ export const AddPhotoModal: React.FC<AddPhotoModalProps> = ({
         </div>
 
         <p className="text-xs text-neutral-400 mt-3 leading-relaxed">
-          Dán liên kết bài viết Instagram (ảnh đơn hoặc carousel nhiều ảnh) để Bot TX3 Mini tự động tải về và lưu vào Kho ảnh Telegram của bạn.
+          Dán liên kết bài viết Instagram hoặc Twitter/X (ảnh, album nhiều ảnh hoặc video MP4) để Bot TX3 Mini tự động tải về và lưu vào Kho lưu trữ Telegram của bạn.
         </p>
 
         {errorMsg && (
@@ -142,7 +147,7 @@ export const AddPhotoModal: React.FC<AddPhotoModalProps> = ({
           <div>
             <div className="flex items-center justify-between mb-1.5">
               <label className="text-xs text-neutral-400 font-medium">
-                Liên kết bài viết Instagram:
+                Liên kết Instagram hoặc Twitter/X:
               </label>
               <button
                 type="button"
@@ -155,7 +160,7 @@ export const AddPhotoModal: React.FC<AddPhotoModalProps> = ({
             </div>
             <input
               type="url"
-              placeholder="https://www.instagram.com/p/..."
+              placeholder="https://instagram.com/p/... hoặc https://x.com/.../status/..."
               value={url}
               onChange={(e) => setUrl(e.target.value)}
               disabled={loading}
@@ -180,13 +185,13 @@ export const AddPhotoModal: React.FC<AddPhotoModalProps> = ({
               className="w-full py-3 bg-gradient-to-r from-pink-600 via-purple-600 to-indigo-600 active:opacity-90 text-white font-semibold rounded-xl text-sm shadow-lg shadow-purple-600/30 flex items-center justify-center gap-2"
             >
               <Send className="w-4 h-4" />
-              <span>Tải & Đẩy Lên Kho Ảnh</span>
+              <span>Tải & Đẩy Lên Kho Lưu Trữ</span>
             </button>
           )}
         </form>
 
         <div className="mt-4 pt-3 border-t border-neutral-800 text-[11px] text-neutral-500 leading-relaxed">
-          💡 <b>Mẹo chia sẻ 1 chạm từ Instagram:</b> Trên ứng dụng Instagram, bạn chỉ cần bấm nút <b>Chia sẻ</b> ➔ chọn <b>Sao chép liên kết</b>, khi bạn mở lại InstaPhotos app sẽ tự động phát hiện và hỏi bạn có muốn tải ngay hay không!
+          💡 <b>Mẹo chia sẻ 1 chạm:</b> Trên ứng dụng Instagram hoặc X (Twitter), bạn chỉ cần bấm nút <b>Chia sẻ</b> ➔ chọn <b>Sao chép liên kết</b>, khi mở lại app hệ thống sẽ tự động phát hiện và hỏi bạn có muốn tải hay không!
         </div>
       </div>
     </div>

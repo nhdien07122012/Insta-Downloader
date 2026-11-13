@@ -4,6 +4,39 @@ Toàn bộ các phiên bản cập nhật, mã bản dựng (build number), chi 
 
 ---
 
+## [v1.4 (Build 6)] - 2026-11-13
+- **Commit SHA**: *Sẽ cập nhật sau khi commit*
+- **Mục tiêu**: Mở rộng toàn diện hệ sinh thái tải media cho cả **Instagram** và **Twitter (X)**, hỗ trợ tải và phát video trực tiếp trong app (In-App Native Video Player), bổ sung danh mục bộ lọc Video và hỗ trợ lưu Video MP4 về Thư viện iPhone (Camera Roll).
+- **Chi tiết thay đổi**:
+  - `bot.py` & `instagram.py`: 
+    - Bổ sung regex nhận diện URL Twitter/X (`x.com` và `twitter.com`).
+    - Nâng cấp `InstagramDownloader` thành bộ tải đa nền tảng, trích xuất ảnh và video từ cả tweet và post Instagram bằng `gallery-dl` và `yt-dlp`.
+    - Tự động gắn tag nguồn bài viết (`🐦 Twitter (X) Lưu Trữ` hoặc `📸 Instagram Lưu Trữ`) và tác giả.
+    - Đẩy media lên Kênh Telegram tự động qua `send_photo`, `send_video` hoặc `send_media_group` (InputMediaVideo/InputMediaPhoto).
+  - `ios-photo-app/src/types/index.ts`: Mở rộng giao diện dữ liệu `PhotoItem` với `mediaType: "photo" | "video"`, `duration?: number`, `platform?: "instagram" | "twitter"`.
+  - `ios-photo-app/src/services/photoStorage.ts`: Nâng cấp IndexedDB Persistent Cache lưu trữ thuộc tính video, thời lượng và nền tảng nguồn; hỗ trợ lưu blob cache HD định dạng `video/mp4` hoặc `image/jpeg`.
+  - `ios-photo-app/src/services/telegramClient.ts`: 
+    - Nâng cấp hàm `fetchChannelPhotos` nhận diện cả ảnh (`msg.media.photo`) và video MP4 (`msg.media.document` có `DocumentAttributeVideo`), đọc thời lượng video và tải thumbnail preview cực nhanh.
+    - Trích xuất metadata và đường dẫn bài viết gốc cho cả Instagram lẫn Twitter/X.
+    - Hàm `fetchFullResolutionPhoto` tự động tải binary gốc và nạp blob video MP4 khi mở chi tiết.
+  - `ios-photo-app/src/components/PhotoGrid.tsx`: Bổ sung huy hiệu Video chuẩn Apple Photos gồm icon tam giác Play và thời lượng video (ví dụ: `0:15`) ở góc dưới phải ảnh.
+  - `ios-photo-app/src/components/PhotoViewer.tsx`:
+    - Tích hợp trình phát video native `<video controls playsInline autoPlay>` khi người dùng mở video, kèm poster thumbnail và hiệu ứng trượt.
+    - Nâng cấp hàm tải về (`handleDownload`) và chia sẻ (`handleShare`) lưu file `.mp4` hoặc `.jpg` chuẩn vào Camera Roll.
+    - Cập nhật Info Sheet hiển thị nguồn Twitter (X) / Instagram tương ứng và nút mở bài viết gốc.
+  - `ios-photo-app/src/components/Header.tsx`: Thêm tab phân loại "🎬 Video" vào thanh Segmented Control.
+  - `ios-photo-app/src/components/AddPhotoModal.tsx`: Hỗ trợ dán liên kết từ cả Instagram lẫn Twitter/X.
+  - `ios-photo-app/src/App.tsx`: Tự động phát hiện liên kết Twitter/X từ bộ nhớ tạm (Clipboard), bổ sung thẻ danh mục "🎬 Video" trong Albums tab và bộ lọc Video.
+  - `ios-photo-app/src/components/SettingsModal.tsx`: Cập nhật chân trang thành `InstaPhotos v1.4 • Build 6 (Twitter & Video Edition)`.
+  - `ios-photo-app/ios/App/App.xcodeproj/project.pbxproj`: Cập nhật `CURRENT_PROJECT_VERSION = 6;` và `MARKETING_VERSION = 1.4;`.
+  - `ios-photo-app/package.json`: Nâng phiên bản lên `"1.4.0"`.
+- **Lệnh hoàn tác mẫu (Rollback)**:
+  ```bash
+  git revert HEAD --no-edit
+  ```
+
+---
+
 ## [v1.3 (Build 5)] - 2026-11-12
 - **Commit SHA**: `7278007`
 - **Mục tiêu**: Bổ sung tính năng xóa ảnh trực tiếp trong ứng dụng đồng bộ 2 chiều (vừa xóa khỏi bộ nhớ máy IndexedDB, vừa gửi lệnh xóa vĩnh viễn tin nhắn trên Kênh Telegram qua MTProto/Bot API) kèm hộp thoại xác nhận an toàn kiểu Action Sheet chuẩn Apple Photos.

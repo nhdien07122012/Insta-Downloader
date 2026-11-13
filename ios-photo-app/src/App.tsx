@@ -32,6 +32,7 @@ import {
   ChevronLeft,
   User,
   Calendar,
+  Video,
 } from "lucide-react";
 
 export const App: React.FC = () => {
@@ -94,13 +95,21 @@ export const App: React.FC = () => {
         let target = "";
         if (data.url.includes("url=")) {
           target = decodeURIComponent(data.url.split("url=")[1]);
-        } else if (data.url.includes("instagram.com")) {
+        } else if (
+          data.url.includes("instagram.com") ||
+          data.url.includes("twitter.com") ||
+          data.url.includes("x.com")
+        ) {
           const match = data.url.match(/https?:\/\/[^\s"']+/i);
           if (match) {
             target = match[0];
           } else {
-            const idx = data.url.indexOf("instagram.com");
-            target = "https://" + data.url.slice(idx);
+            const idx = Math.max(
+              data.url.indexOf("instagram.com"),
+              data.url.indexOf("twitter.com"),
+              data.url.indexOf("x.com")
+            );
+            if (idx >= 0) target = "https://" + data.url.slice(idx);
           }
         }
 
@@ -114,13 +123,15 @@ export const App: React.FC = () => {
     const checkClipboard = async () => {
       try {
         const { value } = await Clipboard.read();
-        if (
+        const isMediaLink =
           value &&
           (value.includes("instagram.com/p/") ||
             value.includes("instagram.com/reel/") ||
-            value.includes("instagram.com/share/"))
-        ) {
-          const lastProcessed = localStorage.getItem("last_clipboard_insta");
+            value.includes("instagram.com/share/") ||
+            value.includes("twitter.com/") ||
+            value.includes("x.com/"));
+        if (isMediaLink) {
+          const lastProcessed = localStorage.getItem("last_clipboard_media");
           if (lastProcessed !== value.trim()) {
             setAddUrl(value.trim());
             setIsAddModalOpen(true);
@@ -271,7 +282,9 @@ export const App: React.FC = () => {
       );
     }
 
-    if (activeFilter === "Hôm nay") {
+    if (activeFilter === "Video") {
+      list = list.filter((p) => p.mediaType === "video");
+    } else if (activeFilter === "Hôm nay") {
       const today = new Date().toDateString();
       list = list.filter((p) => p.date.toDateString() === today);
     } else if (activeFilter === "Tuần này") {
@@ -371,20 +384,20 @@ export const App: React.FC = () => {
             </span>
           </div>
         </div>
-        {/* Banner Phát hiện link Instagram từ Clipboard */}
+        {/* Banner Phát hiện link Instagram hoặc Twitter (X) từ Clipboard */}
         {clipboardPrompt && (
           <div className="mx-4 mt-3 mb-2 p-3.5 bg-gradient-to-r from-purple-950/90 via-pink-950/90 to-neutral-900 border border-pink-500/40 rounded-2xl flex items-center justify-between shadow-xl animate-in slide-in-from-top duration-300">
             <div className="flex-1 min-w-0 mr-3">
               <div className="flex items-center gap-1.5 text-xs font-bold text-white mb-0.5">
                 <Sparkles className="w-3.5 h-3.5 text-pink-400" />
-                <span>Phát hiện liên kết Instagram</span>
+                <span>Phát hiện liên kết Instagram / Twitter (X)</span>
               </div>
               <p className="text-[11px] text-pink-200 truncate">{clipboardPrompt}</p>
             </div>
             <div className="flex items-center gap-1.5 shrink-0">
               <button
                 onClick={() => {
-                  localStorage.setItem("last_clipboard_insta", clipboardPrompt);
+                  localStorage.setItem("last_clipboard_media", clipboardPrompt);
                   setClipboardPrompt(null);
                 }}
                 className="text-[11px] text-neutral-400 px-2 py-1.5 hover:text-white active:opacity-60"
@@ -393,7 +406,7 @@ export const App: React.FC = () => {
               </button>
               <button
                 onClick={() => {
-                  localStorage.setItem("last_clipboard_insta", clipboardPrompt);
+                  localStorage.setItem("last_clipboard_media", clipboardPrompt);
                   setAddUrl(clipboardPrompt);
                   setClipboardPrompt(null);
                   setIsAddModalOpen(true);
@@ -563,21 +576,38 @@ export const App: React.FC = () => {
                 </h2>
 
                 {/* Danh mục đặc biệt */}
-                <div className="grid grid-cols-2 gap-3 mb-6">
+                <div className="grid grid-cols-3 gap-2.5 mb-6">
                   {/* Mục Yêu Thích */}
                   <div
                     onClick={() => {
                       setActiveFilter("Yêu thích");
                       setCurrentTab("library");
                     }}
-                    className="bg-neutral-900 border border-neutral-800 rounded-2xl p-4 cursor-pointer active:scale-98 transition-transform"
+                    className="bg-neutral-900 border border-neutral-800 rounded-2xl p-3 cursor-pointer active:scale-98 transition-transform"
                   >
-                    <div className="w-10 h-10 rounded-xl bg-red-500/20 text-red-500 flex items-center justify-center mb-3">
-                      <Heart className="w-6 h-6 fill-red-500" />
+                    <div className="w-9 h-9 rounded-xl bg-red-500/20 text-red-500 flex items-center justify-center mb-2.5">
+                      <Heart className="w-5 h-5 fill-red-500" />
                     </div>
-                    <h3 className="font-semibold text-white">Yêu thích</h3>
-                    <p className="text-xs text-neutral-400 mt-0.5">
-                      {favorites.size} ảnh đã thích
+                    <h3 className="font-semibold text-xs text-white">Yêu thích</h3>
+                    <p className="text-[11px] text-neutral-400 mt-0.5">
+                      {favorites.size} ảnh
+                    </p>
+                  </div>
+
+                  {/* Mục Video */}
+                  <div
+                    onClick={() => {
+                      setActiveFilter("Video");
+                      setCurrentTab("library");
+                    }}
+                    className="bg-neutral-900 border border-neutral-800 rounded-2xl p-3 cursor-pointer active:scale-98 transition-transform"
+                  >
+                    <div className="w-9 h-9 rounded-xl bg-blue-500/20 text-blue-400 flex items-center justify-center mb-2.5">
+                      <Video className="w-5 h-5" />
+                    </div>
+                    <h3 className="font-semibold text-xs text-white">Video</h3>
+                    <p className="text-[11px] text-neutral-400 mt-0.5">
+                      {photos.filter((p) => p.mediaType === "video").length} video
                     </p>
                   </div>
 
@@ -587,14 +617,14 @@ export const App: React.FC = () => {
                       setActiveFilter("Album");
                       setCurrentTab("library");
                     }}
-                    className="bg-neutral-900 border border-neutral-800 rounded-2xl p-4 cursor-pointer active:scale-98 transition-transform"
+                    className="bg-neutral-900 border border-neutral-800 rounded-2xl p-3 cursor-pointer active:scale-98 transition-transform"
                   >
-                    <div className="w-10 h-10 rounded-xl bg-purple-500/20 text-purple-400 flex items-center justify-center mb-3">
-                      <Layers className="w-6 h-6" />
+                    <div className="w-9 h-9 rounded-xl bg-purple-500/20 text-purple-400 flex items-center justify-center mb-2.5">
+                      <Layers className="w-5 h-5" />
                     </div>
-                    <h3 className="font-semibold text-white">Carousels</h3>
-                    <p className="text-xs text-neutral-400 mt-0.5">
-                      {postAlbums.filter((a) => a.photos.length > 1).length} bài viết
+                    <h3 className="font-semibold text-xs text-white">Carousels</h3>
+                    <p className="text-[11px] text-neutral-400 mt-0.5">
+                      {postAlbums.filter((a) => a.photos.length > 1).length} bài
                     </p>
                   </div>
                 </div>

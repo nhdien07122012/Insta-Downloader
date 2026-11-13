@@ -20,6 +20,9 @@ interface StoredPhotoRecord {
   groupedId?: string;
   timestamp: number;
   isCarousel?: boolean;
+  mediaType?: "photo" | "video";
+  duration?: number;
+  platform?: "instagram" | "twitter";
 }
 
 // In-memory URL cache để tránh tạo lại nhiều lần trong 1 session
@@ -71,6 +74,7 @@ export async function getCachedPhotosFromDB(): Promise<PhotoItem[]> {
             objectUrlMap.set(rec.messageId, url);
           }
 
+          const isTwitter = rec.originalUrl?.includes("twitter.com") || rec.originalUrl?.includes("x.com");
           return {
             id: rec.id,
             messageId: rec.messageId,
@@ -82,6 +86,9 @@ export async function getCachedPhotosFromDB(): Promise<PhotoItem[]> {
             groupedId: rec.groupedId,
             date: new Date(rec.timestamp),
             isCarousel: rec.isCarousel,
+            mediaType: rec.mediaType || "photo",
+            duration: rec.duration,
+            platform: rec.platform || (isTwitter ? "twitter" : "instagram"),
           };
         });
 
@@ -153,7 +160,10 @@ export async function savePhotoToCache(
 /**
  * Lấy URL HD đã lưu trong IndexedDB (nếu có)
  */
-export async function getCachedHdPhoto(messageId: number): Promise<string | null> {
+export async function getCachedHdPhoto(
+  messageId: number,
+  isVideo: boolean = false
+): Promise<string | null> {
   if (hdUrlMap.has(messageId)) {
     return hdUrlMap.get(messageId)!;
   }
@@ -168,7 +178,8 @@ export async function getCachedHdPhoto(messageId: number): Promise<string | null
       request.onsuccess = () => {
         const record = request.result as StoredPhotoRecord | undefined;
         if (record && record.hdData) {
-          const blob = new Blob([record.hdData], { type: "image/jpeg" });
+          const type = isVideo || record.mediaType === "video" ? "video/mp4" : "image/jpeg";
+          const blob = new Blob([record.hdData], { type });
           const url = URL.createObjectURL(blob);
           hdUrlMap.set(messageId, url);
           resolve(url);
@@ -185,11 +196,12 @@ export async function getCachedHdPhoto(messageId: number): Promise<string | null
 }
 
 /**
- * Lưu dữ liệu ảnh HD vào IndexedDB
+ * Lưu dữ liệu ảnh/video HD vào IndexedDB
  */
 export async function saveHdPhotoToCache(
   messageId: number,
-  hdBuffer: ArrayBuffer | Uint8Array
+  hdBuffer: ArrayBuffer | Uint8Array,
+  mimeType: string = "image/jpeg"
 ): Promise<string> {
   const buffer =
     hdBuffer instanceof ArrayBuffer
@@ -199,7 +211,7 @@ export async function saveHdPhotoToCache(
           hdBuffer.byteOffset + hdBuffer.byteLength
         );
 
-  const blob = new Blob([buffer as ArrayBuffer], { type: "image/jpeg" });
+  const blob = new Blob([buffer as ArrayBuffer], { type: mimeType });
   const url = URL.createObjectURL(blob);
   hdUrlMap.set(messageId, url);
 
@@ -217,7 +229,7 @@ export async function saveHdPhotoToCache(
       }
     };
   } catch (e) {
-    console.warn("Lỗi lưu ảnh HD vào cache:", e);
+    console.warn("Lỗi lưu media HD vào cache:", e);
   }
 
   return url;

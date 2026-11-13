@@ -14,6 +14,9 @@ export interface PhotoItem {
   carouselIndex?: number;
   totalInCarousel?: number;
   carouselItems?: PhotoItem[];
+  mediaType?: "photo" | "video";
+  duration?: number; // thời lượng video tính bằng giây
+  platform?: "instagram" | "twitter";
 }
 
 export interface DateGroup {
