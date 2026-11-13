@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import type { TelegramConfig } from "../types";
 import {
   X,
@@ -14,7 +14,13 @@ import {
   RefreshCw,
   Database,
   Trash2,
+  Cloud,
+  Upload,
+  Download,
+  Copy,
+  FileText,
 } from "lucide-react";
+import { Share } from "@capacitor/share";
 import {
   requestTelegramCode,
   verifyTelegramCode,
@@ -38,9 +44,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onCacheCleared,
 }) => {
   const [formData, setFormData] = useState<TelegramConfig>(config);
-  const [activeTab, setActiveTab] = useState<"api" | "login">(
+  const [activeTab, setActiveTab] = useState<"api" | "login" | "backup">(
     config.apiId && config.apiHash && !config.isLoggedIn ? "login" : "api"
   );
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [phone, setPhone] = useState(config.phoneNumber || "");
   const [phoneCodeHash, setPhoneCodeHash] = useState("");
   const [code, setCode] = useState("");
@@ -65,6 +72,154 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     setCacheStats({ count: 0, sizeMB: "0" });
     setStatusMsg("Đã dọn dẹp sạch bộ nhớ đệm ảnh!");
     if (onCacheCleared) onCacheCleared();
+  };
+
+  const handleTriggerRestore = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleExportBackup = async () => {
+    if (!formData.apiId && !formData.apiHash) {
+      setStatusMsg("Chưa có cấu hình API ID và API Hash để sao lưu.");
+      return;
+    }
+
+    const backupPayload = {
+      app: "InstaPhotos",
+      version: "1.5.0",
+      exportedAt: new Date().toISOString(),
+      config: {
+        apiId: formData.apiId,
+        apiHash: formData.apiHash,
+        botToken: formData.botToken,
+        channelId: formData.channelId,
+        phoneNumber: formData.phoneNumber || phone,
+        sessionString: formData.sessionString || localStorage.getItem("tg_session") || "",
+        isLoggedIn: formData.isLoggedIn,
+      },
+    };
+
+    const jsonString = JSON.stringify(backupPayload, null, 2);
+    const fileName = `instaphotos-backup-${new Date().toISOString().slice(0, 10)}.json`;
+
+    // 1. Thử dùng Web File API + navigator.share (chuẩn Share Sheet iOS 15+ xuất file sang Tệp / iCloud Drive)
+    try {
+      const file = new File([jsonString], fileName, { type: "application/json" });
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({
+          files: [file],
+          title: "InstaPhotos Backup",
+          text: "Sao lưu cấu hình InstaPhotos lên iCloud Drive / Tệp",
+        });
+        setStatusMsg("Đang mở bảng chia sẻ. Chọn 'Lưu vào Tệp' để lưu vào iCloud Drive.");
+        return;
+      }
+    } catch (err: any) {
+      if (err.name === "AbortError") return;
+      console.warn("navigator.share file failed:", err);
+    }
+
+    // 2. Thử dùng Capacitor Share plugin
+    try {
+      const canShare = await Share.canShare();
+      if (canShare.value) {
+        await Share.share({
+          title: "Sao lưu cấu hình InstaPhotos",
+          text: jsonString,
+          dialogTitle: "Lưu cấu hình vào iCloud / Tệp",
+        });
+        setStatusMsg("Đã mở bảng chia sẻ! Hãy chọn 'Lưu vào Tệp' để lưu vào iCloud Drive.");
+        return;
+      }
+    } catch (err: any) {
+      if (err.name === "AbortError") return;
+      console.warn("Capacitor Share failed:", err);
+    }
+
+    // 3. Fallback: Tải file trực tiếp
+    try {
+      const blob = new Blob([jsonString], { type: "application/json" });
+      const blobUrl = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = blobUrl;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(blobUrl);
+      setStatusMsg("Đã tạo file sao lưu! Hãy lưu file này vào thư mục iCloud Drive.");
+    } catch {
+      setStatusMsg("Lỗi khi tạo file sao lưu.");
+    }
+  };
+
+  const handleCopyConfig = async () => {
+    const backupPayload = {
+      app: "InstaPhotos",
+      version: "1.5.0",
+      exportedAt: new Date().toISOString(),
+      config: {
+        apiId: formData.apiId,
+        apiHash: formData.apiHash,
+        botToken: formData.botToken,
+        channelId: formData.channelId,
+        phoneNumber: formData.phoneNumber || phone,
+        sessionString: formData.sessionString || localStorage.getItem("tg_session") || "",
+        isLoggedIn: formData.isLoggedIn,
+      },
+    };
+    try {
+      await navigator.clipboard.writeText(JSON.stringify(backupPayload, null, 2));
+      setStatusMsg("Đã sao chép cấu hình vào bộ nhớ tạm (Clipboard)!");
+    } catch {
+      setStatusMsg("Không thể sao chép vào bộ nhớ tạm.");
+    }
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const text = event.target?.result as string;
+        const parsed = JSON.parse(text);
+        const cfg = parsed.config || parsed;
+
+        if (!cfg.apiId && !cfg.apiHash) {
+          setStatusMsg("File không hợp lệ: Không tìm thấy API ID hoặc API Hash.");
+          return;
+        }
+
+        const restoredConfig: TelegramConfig = {
+          apiId: String(cfg.apiId || "").trim(),
+          apiHash: String(cfg.apiHash || "").trim(),
+          botToken: String(cfg.botToken || formData.botToken || "").trim(),
+          channelId: String(cfg.channelId || formData.channelId || "").trim(),
+          phoneNumber: String(cfg.phoneNumber || "").trim(),
+          sessionString: String(cfg.sessionString || "").trim(),
+          isLoggedIn: Boolean(cfg.isLoggedIn && cfg.sessionString),
+        };
+
+        setFormData(restoredConfig);
+        if (restoredConfig.phoneNumber) {
+          setPhone(restoredConfig.phoneNumber);
+        }
+        if (restoredConfig.sessionString) {
+          localStorage.setItem("tg_session", restoredConfig.sessionString);
+        }
+
+        onSave(restoredConfig);
+        setSavedSuccess(true);
+        setStatusMsg("🎉 Khôi phục cấu hình từ iCloud Drive thành công!");
+        setTimeout(() => setSavedSuccess(false), 2000);
+      } catch {
+        setStatusMsg("Lỗi đọc file sao lưu. Vui lòng chọn đúng file .json đã xuất từ InstaPhotos.");
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = "";
   };
 
   if (!isOpen) return null;
@@ -188,7 +343,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             className={`flex-1 py-1.5 text-xs font-semibold rounded-lg transition-all ${
               activeTab === "api"
                 ? "bg-neutral-700 text-white shadow-sm"
-                : "text-neutral-400"
+                : "text-neutral-400 hover:text-neutral-200"
             }`}
           >
             Thông số API
@@ -199,10 +354,22 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             className={`flex-1 py-1.5 text-xs font-semibold rounded-lg transition-all ${
               activeTab === "login"
                 ? "bg-neutral-700 text-white shadow-sm"
-                : "text-neutral-400"
+                : "text-neutral-400 hover:text-neutral-200"
             }`}
           >
             Đăng nhập MTProto
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab("backup")}
+            className={`flex-1 py-1.5 text-xs font-semibold rounded-lg transition-all flex items-center justify-center gap-1 ${
+              activeTab === "backup"
+                ? "bg-blue-600/90 text-white shadow-sm"
+                : "text-neutral-400 hover:text-neutral-200"
+            }`}
+          >
+            <Cloud className="w-3.5 h-3.5 text-blue-400" />
+            Sao lưu iCloud
           </button>
         </div>
 
@@ -214,6 +381,25 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
         {activeTab === "api" && (
           <form onSubmit={handleSubmit} className="mt-4 space-y-4">
+            {/* Quick restore banner */}
+            {(!formData.apiId || !formData.apiHash) && (
+              <div className="p-3 bg-blue-950/40 border border-blue-800/50 rounded-2xl flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2 min-w-0">
+                  <Cloud className="w-4 h-4 text-blue-400 shrink-0" />
+                  <p className="text-xs text-neutral-300 truncate">
+                    Đã có file sao lưu trên iCloud?
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleTriggerRestore}
+                  className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold rounded-xl shrink-0 active:scale-95 transition-all flex items-center gap-1 shadow-sm"
+                >
+                  <Download className="w-3 h-3" />
+                  Khôi phục
+                </button>
+              </div>
+            )}
             <p className="text-xs text-neutral-400 leading-relaxed">
               Lấy <b>API ID</b> & <b>API Hash</b> miễn phí tại:{" "}
               <a
@@ -429,6 +615,104 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           </div>
         )}
 
+        {activeTab === "backup" && (
+          <div className="mt-4 space-y-4">
+            {/* Introduction Card */}
+            <div className="p-4 bg-gradient-to-br from-blue-950/40 to-neutral-900 border border-blue-800/40 rounded-2xl">
+              <div className="flex items-start gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-blue-600/20 border border-blue-500/30 flex items-center justify-center text-blue-400 shrink-0">
+                  <Cloud className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-white">
+                    Sao lưu & Khôi phục qua iCloud Drive
+                  </h3>
+                  <p className="text-xs text-neutral-400 mt-1 leading-relaxed">
+                    Lưu toàn bộ <b>API ID, API Hash, ID Kênh</b> và <b>Phiên đăng nhập</b> vào iCloud Drive cá nhân qua ứng dụng <b>Tệp (Files)</b> của iPhone.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Current Config Status Preview */}
+            <div className="p-3.5 bg-neutral-800/60 border border-neutral-700/60 rounded-2xl space-y-2">
+              <div className="text-xs font-semibold text-neutral-300 flex items-center gap-1.5">
+                <FileText className="w-3.5 h-3.5 text-neutral-400" />
+                Dữ liệu hiện tại:
+              </div>
+              <div className="grid grid-cols-2 gap-2 text-[11px] text-neutral-400">
+                <div className="bg-neutral-900/60 p-2 rounded-xl border border-neutral-800">
+                  <span className="text-neutral-500 block">API ID:</span>
+                  <span className="font-mono text-neutral-200">
+                    {formData.apiId ? `${formData.apiId.slice(0, 4)}••••` : "(Chưa có)"}
+                  </span>
+                </div>
+                <div className="bg-neutral-900/60 p-2 rounded-xl border border-neutral-800">
+                  <span className="text-neutral-500 block">API Hash:</span>
+                  <span className="font-mono text-neutral-200">
+                    {formData.apiHash ? "Đã cấu hình" : "(Chưa có)"}
+                  </span>
+                </div>
+                <div className="bg-neutral-900/60 p-2 rounded-xl border border-neutral-800">
+                  <span className="text-neutral-500 block">ID Kênh:</span>
+                  <span className="font-mono text-neutral-200 truncate block">
+                    {formData.channelId || "(Chưa có)"}
+                  </span>
+                </div>
+                <div className="bg-neutral-900/60 p-2 rounded-xl border border-neutral-800">
+                  <span className="text-neutral-500 block">Đăng nhập:</span>
+                  <span className={formData.isLoggedIn ? "text-emerald-400 font-medium" : "text-amber-400"}>
+                    {formData.isLoggedIn ? "Đã kết nối" : "Chưa kết nối"}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="space-y-2.5 pt-1">
+              <button
+                type="button"
+                onClick={handleExportBackup}
+                className="w-full py-3 px-4 bg-blue-600 hover:bg-blue-500 active:scale-[0.98] text-white font-semibold rounded-2xl text-sm shadow-lg shadow-blue-900/20 flex items-center justify-center gap-2 transition-all"
+              >
+                <Upload className="w-4 h-4" />
+                Sao lưu ra iCloud Drive (Tệp)
+              </button>
+
+              <button
+                type="button"
+                onClick={handleTriggerRestore}
+                className="w-full py-3 px-4 bg-emerald-600 hover:bg-emerald-500 active:scale-[0.98] text-white font-semibold rounded-2xl text-sm shadow-lg shadow-emerald-900/20 flex items-center justify-center gap-2 transition-all"
+              >
+                <Download className="w-4 h-4" />
+                Khôi phục từ iCloud Drive (Tệp)
+              </button>
+
+              <button
+                type="button"
+                onClick={handleCopyConfig}
+                className="w-full py-2.5 px-4 bg-neutral-800 hover:bg-neutral-750 active:scale-[0.98] text-neutral-300 font-medium rounded-2xl text-xs flex items-center justify-center gap-2 border border-neutral-700 transition-all"
+              >
+                <Copy className="w-3.5 h-3.5 text-neutral-400" />
+                Sao chép văn bản cấu hình (Clipboard)
+              </button>
+            </div>
+
+            <p className="text-[11px] text-neutral-500 text-center leading-relaxed px-2">
+              💡 File sao lưu có đuôi <code>.json</code>. Bạn có thể lưu vào bất kỳ thư mục nào trên iCloud Drive để khôi phục nhanh khi cài lại máy.
+            </p>
+          </div>
+        )}
+
+        {/* Hidden File Input for iCloud / Files document picker */}
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".json,application/json"
+          onChange={handleFileChange}
+          className="hidden"
+        />
+
         {/* Quản lý Bộ nhớ đệm ảnh (Offline Cache) */}
         <div className="mt-5 pt-4 border-t border-neutral-850">
           <div className="flex items-center justify-between mb-2">
@@ -462,7 +746,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         {/* Footer App Version & Build */}
         <div className="pt-4 pb-1 text-center border-t border-neutral-800/80">
           <p className="text-[11px] text-neutral-500 font-medium">
-            InstaPhotos v1.4.8 • Build 14 (Photo-Focused & Video Player)
+            InstaPhotos v1.5.0 • Build 15 (iCloud Drive Backup & Restore)
           </p>
         </div>
       </div>

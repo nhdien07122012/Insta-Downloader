@@ -34,6 +34,11 @@ export function getStoredConfig(): TelegramConfig {
 
 export function saveStoredConfig(config: TelegramConfig) {
   localStorage.setItem(CONFIG_STORAGE_KEY, JSON.stringify(config));
+  if (config.sessionString) {
+    localStorage.setItem("tg_session", config.sessionString);
+  } else if (config.isLoggedIn === false) {
+    localStorage.removeItem("tg_session");
+  }
 }
 
 /**

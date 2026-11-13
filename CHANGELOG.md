@@ -4,6 +4,27 @@ Toàn bộ các phiên bản cập nhật, mã bản dựng (build number), chi 
 
 ---
 
+## [v1.5.0 (Build 15)] - 2026-11-13
+- **Commit SHA**: `7bcbc64`
+- **Mục tiêu**: Bổ sung tính năng **Sao lưu & Khôi phục dữ liệu qua iCloud Drive** (thông qua ứng dụng Tệp / iOS Share Sheet và Native Document Picker) trên ứng dụng iOS `InstaPhotos`. Cho phép người dùng xuất toàn bộ cấu hình (`apiId`, `apiHash`, `botToken`, `channelId`, `phoneNumber`, `sessionString`, và trạng thái `isLoggedIn`) thành tệp sao lưu `.json` lưu thẳng vào iCloud Drive. Khi cài lại ứng dụng hoặc đổi máy mới, chỉ cần 1 chạm khôi phục để sử dụng ngay tức thì mà không cần nhập lại mã API hay đợi mã xác thực Telegram OTP. Đồng thời duy trì 100% tính năng tải ảnh Instagram & Twitter (𝕏) trên TX3 Mini và trình xem video trên app iOS.
+- **Chi tiết thay đổi**:
+  - `ios-photo-app/src/services/telegramClient.ts`: Cập nhật `saveStoredConfig` đồng bộ `sessionString` với `localStorage.getItem("tg_session")` và xóa sạch session khi người dùng đăng xuất.
+  - `ios-photo-app/src/components/SettingsModal.tsx`:
+    - Thêm tab thứ 3: **"Sao lưu iCloud"** (`activeTab: "api" | "login" | "backup"`).
+    - Tích hợp tính năng **Sao lưu ra iCloud Drive (Tệp)**: Tạo tệp JSON chứa đầy đủ thông tin cấu hình và phiên đăng nhập, mở trực tiếp iOS Share Sheet với nút "Lưu vào Tệp" (Save to Files) để lưu vào iCloud Drive cá nhân. Hỗ trợ fallback tải tệp hoặc sao chép văn bản cấu hình vào Clipboard.
+    - Tích hợp tính năng **Khôi phục từ iCloud Drive (Tệp)**: Kích hoạt Document Picker của iOS để chọn tệp sao lưu `.json`, tự động kiểm tra tính hợp lệ, nạp dữ liệu API, phiên đăng nhập Telegram và cập nhật tức thì vào ứng dụng.
+    - Bổ sung thanh thông báo khôi phục nhanh (Quick restore banner) ngay tại tab "Thông số API" khi máy mới chưa có cấu hình.
+    - Cập nhật thông tin phiên bản hiển thị tại chân trang: `InstaPhotos v1.5.0 • Build 15 (iCloud Drive Backup & Restore)`.
+  - `ios-photo-app/package.json`: Nâng phiên bản lên `"1.5.0"`.
+  - `ios-photo-app/ios/App/App.xcodeproj/project.pbxproj`: Cập nhật `CURRENT_PROJECT_VERSION = 15;` và `MARKETING_VERSION = 1.5;`.
+- **Link tải IPA trực tiếp**: [https://github.com/nhdien07122012/Insta-Downloader/releases/latest/download/InstaPhotos.ipa](https://github.com/nhdien07122012/Insta-Downloader/releases/latest/download/InstaPhotos.ipa)
+- **Lệnh hoàn tác mẫu (Rollback)**:
+  ```bash
+  git revert HEAD --no-edit
+  ```
+
+---
+
 ## [v1.4.8 (Build 14)] - 2026-11-13
 - **Commit SHA**: `1ce11c5`
 - **Mục tiêu**: Chuyên biệt hóa triệt để bot trên TX3 Mini thành bộ máy lưu trữ **ẢNH (Photos / Carousels / Link Cards)** siêu tốc cho cả **Instagram** và **Twitter (𝕏)** theo yêu cầu của người dùng. Loại bỏ hoàn toàn chức năng tải video và nén video bằng FFmpeg trên TX3 Mini để CPU luôn nhẹ nhàng, mát mẻ (5-7%) và tải ảnh chỉ mất 1-2 giây. Đồng thời **bảo toàn nguyên vẹn 100% tính năng trình phát video HD trên ứng dụng iOS**.
