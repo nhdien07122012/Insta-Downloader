@@ -26,12 +26,12 @@ export const PhotoGrid: React.FC<PhotoGridProps> = ({
     <div className="pb-32">
       {groups.map((group, gIdx) => (
         <section key={gIdx} className="mb-6">
-          {/* Section Header (Ngày tháng) - Apple Liquid Glass subtle strip */}
-          <div className="sticky top-[98px] z-20 px-4 py-2 liquid-glass-subtle !backdrop-blur-xl border-y border-white/10 flex items-center justify-between">
+          {/* Section Header (Ngày tháng) */}
+          <div className="sticky top-[96px] z-20 px-4 py-2 bg-black/85 backdrop-blur-md flex items-center justify-between">
             <h2 className="text-base font-bold text-white tracking-tight">
               {group.dateTitle}
             </h2>
-            <span className="text-xs text-neutral-300 font-medium px-2 py-0.5 rounded-full bg-white/10">
+            <span className="text-xs text-neutral-400 font-medium">
               {group.photos.length} ảnh
             </span>
           </div>
@@ -53,7 +53,7 @@ export const PhotoGrid: React.FC<PhotoGridProps> = ({
 
                 {/* Badge Carousel (Nhiều ảnh) */}
                 {photo.isCarousel && (
-                  <div className="absolute top-1.5 right-1.5 p-1 rounded-md liquid-glass-subtle text-white shadow-sm">
+                  <div className="absolute top-1.5 right-1.5 p-1 rounded-md bg-black/60 backdrop-blur-sm text-white">
                     <Layers className="w-3.5 h-3.5" />
                   </div>
                 )}
