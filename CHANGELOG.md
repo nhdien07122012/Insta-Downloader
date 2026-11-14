@@ -5,16 +5,18 @@ Toàn bộ các phiên bản cập nhật, mã bản dựng (build number), chi 
 ---
 
 ## [v1.5.1 (Build 16)] - 2026-11-14
-- **Commit SHA**: `0a84df9`
-- **Mục tiêu**: Bổ sung tính năng **Xử lý đồng loạt liên kết song song (`concurrent_updates=3`)**, bóc tách **đa liên kết trong cùng 1 tin nhắn** (`extract_all_media_targets`), và phát triển tính năng **Quét & Tự động xử lý toàn bộ liên kết tồn đọng trong Kênh lưu trữ Telegram** (`/scan` command & startup background scanner). Đảm bảo TX3 Mini xử lý mượt mà khi người dùng gửi dồn dập nhiều link, đồng thời dọn sạch toàn bộ các link chưa tải đang chờ trên kênh.
+- **Commit SHA**: `0a84df9` (và bản vá hoàn thiện)
+- **Mục tiêu**: Bổ sung tính năng **Xử lý đồng loạt liên kết song song (`concurrent_updates=3`)**, bóc tách **đa liên kết trong cùng 1 tin nhắn** (`extract_all_media_targets`), và phát triển tính năng **Quét & Tự động xử lý toàn bộ liên kết tồn đọng trong Kênh lưu trữ Telegram** (`/scan` command & startup background scanner). Hỗ trợ nhận lệnh `/scan` trực tiếp từ trong Kênh lưu trữ (thông qua `filters.ALL` & `UpdateType.CHANNEL_POSTS`), tự động dọn dẹp tin nhắn lệnh sau khi hoàn tất để kênh luôn gọn gàng. Đảm bảo TX3 Mini xử lý mượt mà khi người dùng gửi dồn dập nhiều link, đồng thời dọn sạch toàn bộ các link chưa tải đang chờ trên kênh.
 - **Chi tiết thay đổi**:
   - `bot.py`:
     - Tích hợp `concurrent_updates=3` trong `ApplicationBuilder` giúp bot trên TX3 Mini xử lý song song tối đa 3 tác vụ tải và đẩy ảnh cùng lúc.
+    - Cấu hình toàn bộ CommandHandler (`/scan`, `/start`, `/help`, `/stats`, v.v.) với `filters=filters.ALL` để bot có thể lắng nghe và phản hồi lệnh ngay cả khi gửi trực tiếp trong Kênh lưu trữ (`channel_post`).
+    - Bổ sung `MessageHandler(filters.Regex(r"^/scan(?:\s|@|$)"))` dự phòng đảm bảo lệnh `/scan` luôn kích hoạt 100% trong Kênh.
+    - Tự động xóa tin nhắn `/scan` và tin nhắn báo trạng thái sau 10 giây nếu chạy trong Kênh để giữ kênh lưu trữ luôn sạch sẽ.
     - Tái cấu trúc hàm `process_single_target`: Module hóa quy trình tải ảnh, bóc tách metadata, đẩy ảnh lên kênh, xóa link gốc và lưu vào SQLite.
     - Cập nhật `handle_instagram_message`: Sử dụng `extract_all_media_targets` để xử lý trọn vẹn cả trường hợp người dùng gửi 1 tin nhắn chứa nhiều link cùng lúc.
-    - Thêm tính năng `scan_and_process_channel_backlog`: Quét ngược tin nhắn trong kênh lưu trữ thông qua cơ chế forwardMessage an toàn, tự động phát hiện mọi link Twitter/X và Instagram còn tồn đọng, cào ảnh về kho và xóa sạch link gốc.
-    - Thêm lệnh `/scan` cho phép người dùng kích hoạt quét kênh thủ công bất cứ lúc nào.
-    - Bổ sung `post_init_callback`: Tự động kích hoạt quét kênh ngầm sau khi bot khởi động 5 giây.
+    - Thêm tính năng `scan_and_process_channel_backlog`: Quét ngược tin nhắn trong kênh lưu trữ thông qua cơ chế forwardMessage an toàn, tự động phát hiện mọi link Twitter/X và Instagram còn tồn đọng, cào ảnh về kho và xóa sạch link gốc. Tích hợp độ trễ 50ms chống Telegram Flood Control.
+    - Bổ sung `post_init_callback`: Tự động kích hoạt quét kênh ngầm sau khi bot khởi động 5 giây với giới hạn lên tới 100 bài gần nhất.
   - `instagram.py`:
     - Thêm hàm `extract_all_media_targets` bóc tách toàn bộ link Instagram và Twitter/X trong 1 khối văn bản.
     - Cập nhật `INSTA_URL_PATTERN` hỗ trợ các định dạng URL chia sẻ mới của Instagram (`/share/p/`, `/share/reel/`).

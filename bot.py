@@ -519,10 +519,18 @@ async def scan_and_process_channel_backlog(bot, limit: int = 60) -> int:
                 from_chat_id=channel_id,
                 message_id=mid,
             )
-            raw_text = fwd.text or fwd.caption or ""
+            raw_text = (fwd.text or fwd.caption or "").strip()
             fwd_id = fwd.message_id
             # Xóa ngay tin nhắn forward tạm
             await bot.delete_message(chat_id=channel_id, message_id=fwd_id)
+
+            # Dọn dẹp tin nhắn lệnh /scan cũ nếu còn tồn tại trong kênh
+            if raw_text.startswith("/scan"):
+                try:
+                    await bot.delete_message(chat_id=channel_id, message_id=mid)
+                except Exception:
+                    pass
+                continue
 
             # Bỏ qua nếu tin nhắn này là bài đăng đã lưu của bot (có chứa 'Lưu Trữ' hoặc không có link)
             if "Lưu Trữ" in raw_text and ("Tác giả:" in raw_text or "Số lượng:" in raw_text):
@@ -551,6 +559,8 @@ async def scan_and_process_channel_backlog(bot, limit: int = 60) -> int:
                 except Exception:
                     pass
 
+            await asyncio.sleep(0.05)  # Tránh flood rate limit của Telegram
+
         except Exception:
             # Tin nhắn không tồn tại hoặc đã bị xóa -> bỏ qua
             continue
@@ -560,23 +570,67 @@ async def scan_and_process_channel_backlog(bot, limit: int = 60) -> int:
 
 
 async def scan_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Lệnh /scan: Quét và xử lý toàn bộ link tồn đọng trên Kênh lưu trữ."""
+    """Lệnh /scan: Quét và xử lý toàn bộ link tồn đọng trên Kênh lưu trữ (hỗ trợ cả chat riêng và trong kênh)."""
+    chat = update.effective_chat
+    msg = update.effective_message
     user = update.effective_user
+
+    # Bỏ qua nếu từ user không được cấp phép trong chat riêng
     if user and not is_user_allowed(user.id):
         return
 
-    msg = update.effective_message
+    # Nếu gửi trong channel: chỉ cho phép từ kênh lưu trữ chính
+    if chat and chat.type == ChatType.CHANNEL:
+        if TELEGRAM_STORAGE_CHANNEL_ID and chat.id != TELEGRAM_STORAGE_CHANNEL_ID:
+            return
+
+    scan_limit = 100
+    if context.args and len(context.args) > 0:
+        try:
+            scan_limit = min(300, max(10, int(context.args[0])))
+        except ValueError:
+            pass
+
     status_msg = None
-    if msg:
-        status_msg = await msg.reply_text("🔍 <b>Đang quét kênh lưu trữ để tìm các bài đăng chưa xử lý...</b>", parse_mode=ParseMode.HTML)
+    if chat:
+        try:
+            status_msg = await context.bot.send_message(
+                chat_id=chat.id,
+                text=f"🔍 <b>Đang quét kênh lưu trữ (tối đa {scan_limit} tin gần nhất)...</b>",
+                parse_mode=ParseMode.HTML,
+            )
+        except Exception as e:
+            logger.warning(f"Không thể gửi thông báo scan: {e}")
 
-    count = await scan_and_process_channel_backlog(context.bot, limit=60)
+    count = await scan_and_process_channel_backlog(context.bot, limit=scan_limit)
 
-    if status_msg:
-        if count > 0:
-            await status_msg.edit_text(f"🎉 <b>Quét hoàn tất!</b>\nĐã phát hiện và tải thành công <b>{count}</b> bài viết tồn đọng vào kho.", parse_mode=ParseMode.HTML)
-        else:
-            await status_msg.edit_text("✅ <b>Kênh lưu trữ sạch sẽ!</b> Không có link tồn đọng nào cần xử lý.", parse_mode=ParseMode.HTML)
+    if status_msg and chat:
+        try:
+            if count > 0:
+                await status_msg.edit_text(
+                    f"🎉 <b>Quét hoàn tất!</b>\nĐã phát hiện và tải thành công <b>{count}</b> bài viết tồn đọng vào kho.",
+                    parse_mode=ParseMode.HTML,
+                )
+            else:
+                await status_msg.edit_text(
+                    "✅ <b>Kênh lưu trữ sạch sẽ!</b> Không có link tồn đọng nào cần xử lý.",
+                    parse_mode=ParseMode.HTML,
+                )
+
+            # Tự động xóa tin nhắn /scan và status_msg sau 10 giây nếu gửi trong channel
+            if chat.type == ChatType.CHANNEL:
+                await asyncio.sleep(10)
+                if msg:
+                    try:
+                        await msg.delete()
+                    except Exception:
+                        pass
+                try:
+                    await status_msg.delete()
+                except Exception:
+                    pass
+        except Exception as e:
+            logger.warning(f"Lỗi khi cập nhật kết quả scan: {e}")
 
 
 async def post_init_callback(application: Application):
@@ -585,7 +639,7 @@ async def post_init_callback(application: Application):
         await asyncio.sleep(5)  # Đợi bot ổn định kết nối
         logger.info("🚀 Tự động kích hoạt quét link tồn đọng trên kênh lưu trữ khi khởi động...")
         try:
-            count = await scan_and_process_channel_backlog(application.bot, limit=60)
+            count = await scan_and_process_channel_backlog(application.bot, limit=100)
             if count > 0:
                 logger.info(f"🎉 Tự động dọn dẹp và xử lý thành công {count} bài viết tồn đọng trên kênh!")
         except Exception as e:
@@ -619,19 +673,22 @@ def create_bot_application() -> Application:
         .build()
     )
 
-    # Đăng ký các command
-    app.add_handler(CommandHandler("start", start_command))
-    app.add_handler(CommandHandler("help", help_command))
-    app.add_handler(CommandHandler("scan", scan_command))
-    app.add_handler(CommandHandler("stats", stats_command))
-    app.add_handler(CommandHandler("recent", recent_command))
-    app.add_handler(CommandHandler("status", status_command))
+    # Đăng ký các command (dùng filters.ALL để nhận lệnh từ cả Chat riêng, Nhóm và Kênh Lưu Trữ channel_post)
+    app.add_handler(CommandHandler("start", start_command, filters=filters.ALL))
+    app.add_handler(CommandHandler("help", help_command, filters=filters.ALL))
+    app.add_handler(CommandHandler("scan", scan_command, filters=filters.ALL))
+    app.add_handler(CommandHandler("stats", stats_command, filters=filters.ALL))
+    app.add_handler(CommandHandler("recent", recent_command, filters=filters.ALL))
+    app.add_handler(CommandHandler("status", status_command, filters=filters.ALL))
+
+    # Đảm bảo lệnh /scan luôn được bắt kể cả khi gửi dạng văn bản thường trong Kênh
+    app.add_handler(MessageHandler(filters.Regex(r"^/scan(?:\s|@|$)"), scan_command))
 
     # Đăng ký message handler nhận link Instagram & Twitter/X (cả tin nhắn thường, caption và tin trong channel)
     url_pattern = re.compile(r"(instagram\.com|twitter\.com|x\.com|t\.co)", re.IGNORECASE)
     media_filter = (
         (filters.Regex(url_pattern) | filters.CaptionRegex(url_pattern))
-        & (~filters.COMMAND)
+        & (~filters.Regex(r"^/"))
     )
     app.add_handler(MessageHandler(media_filter, handle_instagram_message))
 
