@@ -4,6 +4,32 @@ Toàn bộ các phiên bản cập nhật, mã bản dựng (build number), chi 
 
 ---
 
+## [v1.5.1 (Build 16)] - 2026-11-14
+- **Commit SHA**: `0a84df9`
+- **Mục tiêu**: Bổ sung tính năng **Xử lý đồng loạt liên kết song song (`concurrent_updates=3`)**, bóc tách **đa liên kết trong cùng 1 tin nhắn** (`extract_all_media_targets`), và phát triển tính năng **Quét & Tự động xử lý toàn bộ liên kết tồn đọng trong Kênh lưu trữ Telegram** (`/scan` command & startup background scanner). Đảm bảo TX3 Mini xử lý mượt mà khi người dùng gửi dồn dập nhiều link, đồng thời dọn sạch toàn bộ các link chưa tải đang chờ trên kênh.
+- **Chi tiết thay đổi**:
+  - `bot.py`:
+    - Tích hợp `concurrent_updates=3` trong `ApplicationBuilder` giúp bot trên TX3 Mini xử lý song song tối đa 3 tác vụ tải và đẩy ảnh cùng lúc.
+    - Tái cấu trúc hàm `process_single_target`: Module hóa quy trình tải ảnh, bóc tách metadata, đẩy ảnh lên kênh, xóa link gốc và lưu vào SQLite.
+    - Cập nhật `handle_instagram_message`: Sử dụng `extract_all_media_targets` để xử lý trọn vẹn cả trường hợp người dùng gửi 1 tin nhắn chứa nhiều link cùng lúc.
+    - Thêm tính năng `scan_and_process_channel_backlog`: Quét ngược tin nhắn trong kênh lưu trữ thông qua cơ chế forwardMessage an toàn, tự động phát hiện mọi link Twitter/X và Instagram còn tồn đọng, cào ảnh về kho và xóa sạch link gốc.
+    - Thêm lệnh `/scan` cho phép người dùng kích hoạt quét kênh thủ công bất cứ lúc nào.
+    - Bổ sung `post_init_callback`: Tự động kích hoạt quét kênh ngầm sau khi bot khởi động 5 giây.
+  - `instagram.py`:
+    - Thêm hàm `extract_all_media_targets` bóc tách toàn bộ link Instagram và Twitter/X trong 1 khối văn bản.
+    - Cập nhật `INSTA_URL_PATTERN` hỗ trợ các định dạng URL chia sẻ mới của Instagram (`/share/p/`, `/share/reel/`).
+  - `ios-photo-app`:
+    - `ios-photo-app/package.json`: Nâng phiên bản lên `"1.5.1"`.
+    - `ios-photo-app/ios/App/App.xcodeproj/project.pbxproj`: Cập nhật `CURRENT_PROJECT_VERSION = 16;` và `MARKETING_VERSION = 1.5.1;`.
+    - `ios-photo-app/src/components/SettingsModal.tsx`: Cập nhật chân trang hiển thị `InstaPhotos v1.5.1 • Build 16 (Concurrent Processing & Auto Scanner)`.
+- **Link tải IPA trực tiếp**: [https://github.com/nhdien07122012/Insta-Downloader/releases/latest/download/InstaPhotos.ipa](https://github.com/nhdien07122012/Insta-Downloader/releases/latest/download/InstaPhotos.ipa)
+- **Lệnh hoàn tác mẫu (Rollback)**:
+  ```bash
+  git revert HEAD --no-edit
+  ```
+
+---
+
 ## [v1.5.0 (Build 15)] - 2026-11-13
 - **Commit SHA**: `7bcbc64`
 - **Mục tiêu**: Bổ sung tính năng **Sao lưu & Khôi phục dữ liệu qua iCloud Drive** (thông qua ứng dụng Tệp / iOS Share Sheet và Native Document Picker) trên ứng dụng iOS `InstaPhotos`. Cho phép người dùng xuất toàn bộ cấu hình (`apiId`, `apiHash`, `botToken`, `channelId`, `phoneNumber`, `sessionString`, và trạng thái `isLoggedIn`) thành tệp sao lưu `.json` lưu thẳng vào iCloud Drive. Khi cài lại ứng dụng hoặc đổi máy mới, chỉ cần 1 chạm khôi phục để sử dụng ngay tức thì mà không cần nhập lại mã API hay đợi mã xác thực Telegram OTP. Đồng thời duy trì 100% tính năng tải ảnh Instagram & Twitter (𝕏) trên TX3 Mini và trình xem video trên app iOS.

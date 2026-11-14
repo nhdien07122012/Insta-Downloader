@@ -32,7 +32,12 @@ from config import (
     is_user_allowed,
 )
 import database
-from instagram import InstagramDownloader, clean_download_dir, extract_shortcode
+from instagram import (
+    InstagramDownloader,
+    clean_download_dir,
+    extract_shortcode,
+    extract_all_media_targets,
+)
 
 logger = logging.getLogger("InstaBot")
 downloader = InstagramDownloader()
@@ -114,6 +119,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "• Cách 1: Gửi hoặc bấm <b>Chia sẻ</b> link Instagram hoặc Twitter/X vào khung chat này với Bot!\n"
         "• Cách 2: Dán link thẳng vào Kênh lưu trữ của bạn (Bot sẽ tự cào và thay thế bằng ảnh/video gốc).\n\n"
         "Các lệnh hữu ích:\n"
+        "/scan - Quét & tự động tải toàn bộ link tồn đọng trên Kênh\n"
         "/recent - Xem các bài viết đã lưu gần đây\n"
         "/stats - Thống kê kho ảnh lưu trữ\n"
         "/status - Kiểm tra trạng thái kết nối & cookies"
@@ -206,69 +212,45 @@ async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(text, parse_mode=ParseMode.HTML)
 
 
-async def handle_instagram_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Xử lý tin nhắn chứa liên kết Instagram (cả từ chat riêng và từ kênh lưu trữ)."""
-    msg = update.effective_message
-    if not msg:
-        return
-
-    text = msg.text or msg.caption or ""
-    shortcode = extract_shortcode(text)
-    if not shortcode:
-        return
-
-    is_channel = update.channel_post is not None or (update.effective_chat and update.effective_chat.type == ChatType.CHANNEL)
-    user = update.effective_user
-
-    # Nếu từ chat riêng, kiểm tra quyền
-    if not is_channel and user and not is_user_allowed(user.id):
-        await msg.reply_text("⛔ Bạn không có quyền sử dụng bot này.")
-        return
-
-    status_msg = None
-    if not is_channel:
-        status_msg = await msg.reply_text(
-            "⏳ <b>Đang lấy media chất lượng cao từ liên kết...</b>",
-            parse_mode=ParseMode.HTML,
-        )
-
+async def process_single_target(
+    bot,
+    target: Dict[str, Any],
+    destination_chat_id: Any,
+    original_msg_chat_id: Any = None,
+    original_msg_id: Any = None,
+    user: Any = None,
+    status_msg: Any = None,
+) -> bool:
+    """Tải và đẩy 1 bài viết (Instagram hoặc Twitter/X) lên Kênh lưu trữ."""
+    target_url = target["url"]
+    shortcode = target["id"]
     download_result = None
+
     try:
-        # 1. Tải ảnh/video từ Instagram hoặc Twitter/X
-        download_result = await downloader.download_post(text)
+        download_result = await downloader.download_post(target_url)
         media_files = download_result["media_files"]
         platform = download_result.get("platform", "instagram")
         platform_name = "Twitter (X)" if platform == "twitter" else "Instagram"
         platform_icon = "🐦" if platform == "twitter" else "📸"
 
-        # Xóa ngay tin nhắn chứa link sau khi đã tải ảnh về máy thành công
-        # Đảm bảo tin nhắn link biến mất ngay lập tức, không phụ thuộc vào thời gian upload
-        if is_channel or DELETE_LINK_MESSAGE:
+        # Xóa tin nhắn link gốc sau khi tải thành công
+        if original_msg_chat_id and original_msg_id:
             try:
-                await context.bot.delete_message(chat_id=msg.chat_id, message_id=msg.message_id)
-                logger.info(f"🗑️ Đã xóa tin nhắn link gốc (chat_id={msg.chat_id}, ID: {msg.message_id})")
+                await bot.delete_message(chat_id=original_msg_chat_id, message_id=original_msg_id)
+                logger.info(f"🗑️ Đã xóa tin nhắn link gốc (chat_id={original_msg_chat_id}, ID: {original_msg_id})")
             except Exception as e_del:
-                err_str = str(e_del).lower()
-                if "message can't be deleted" in err_str and not is_channel:
-                    logger.debug("Tin nhắn trong chat riêng không thể xóa (giới hạn chính sách Telegram Bot API).")
-                else:
-                    logger.warning(f"⚠️ Không thể xóa tin nhắn link (ID: {msg.message_id}): {e_del}")
+                logger.debug(f"Không thể xóa tin nhắn link gốc: {e_del}")
 
         if status_msg:
-            await status_msg.edit_text(
-                f"⏳ Đã tải xong <b>{len(media_files)}</b> tệp từ {platform_name}. Đang đẩy lên Kênh lưu trữ Telegram...",
-                parse_mode=ParseMode.HTML,
-            )
+            try:
+                await status_msg.edit_text(
+                    f"⏳ Đã tải xong <b>{len(media_files)}</b> tệp từ {platform_name}. Đang đẩy lên Kênh lưu trữ...",
+                    parse_mode=ParseMode.HTML,
+                )
+            except Exception:
+                pass
 
-        # 2. Xác định kênh nhận ảnh
-        # Nếu link gửi thẳng vào kênh -> đích là chính kênh đó.
-        # Nếu gửi trong chat riêng -> đích là TELEGRAM_STORAGE_CHANNEL_ID (hoặc chat riêng nếu chưa set kênh)
-        if is_channel:
-            destination_chat_id = update.effective_chat.id
-        else:
-            destination_chat_id = TELEGRAM_STORAGE_CHANNEL_ID or update.effective_chat.id
-
-        # 3. Chuẩn bị caption
+        # Chuẩn bị caption
         author = download_result.get("author", "")
         author_text = f"👤 Tác giả: @{author}\n" if author else ""
         raw_caption = download_result.get("caption", "").strip()
@@ -286,13 +268,12 @@ async def handle_instagram_message(update: Update, context: ContextTypes.DEFAULT
         sent_messages = []
         saved_media_records = []
 
-        # 4. Upload lên Telegram
-        # Trường hợp 1: Chỉ có 1 file
+        # Upload lên Telegram
         if len(media_files) == 1:
             item = media_files[0]
             with open(item["path"], "rb") as f:
                 if item["type"] == "photo":
-                    m_sent = await context.bot.send_photo(
+                    m_sent = await bot.send_photo(
                         chat_id=destination_chat_id,
                         photo=f,
                         caption=caption_storage,
@@ -306,45 +287,25 @@ async def handle_instagram_message(update: Update, context: ContextTypes.DEFAULT
                     width = m_sent.photo[-1].width
                     height = m_sent.photo[-1].height
                 else:
-                    file_size_bytes = os.path.getsize(item["path"])
-                    if file_size_bytes > 50 * 1024 * 1024:
-                        size_mb = file_size_bytes / (1024 * 1024)
-                        warn_caption = (
-                            f"{caption_storage}\n\n"
-                            f"⚠️ <b>Video có dung lượng {size_mb:.1f}MB</b> (vượt quá giới hạn 50MB của Telegram Bot API).\n"
-                            f"💡 <i>Gợi ý: Cài đặt ffmpeg trên TX3 Mini (<code>sudo apt-get install -y ffmpeg</code>) để Bot tự động nén video dài về dưới 50MB.</i>"
-                        )
-                        m_sent = await context.bot.send_message(
-                            chat_id=destination_chat_id,
-                            text=warn_caption,
-                            parse_mode=ParseMode.HTML,
-                            disable_web_page_preview=False,
-                        )
-                        file_id = ""
-                        file_unique_id = ""
-                        file_size = file_size_bytes
-                        width = 0
-                        height = 0
-                    else:
-                        v_meta = get_video_meta(item["path"])
-                        m_sent = await context.bot.send_video(
-                            chat_id=destination_chat_id,
-                            video=f,
-                            caption=caption_storage,
-                            parse_mode=ParseMode.HTML,
-                            supports_streaming=True,
-                            duration=v_meta["duration"],
-                            width=v_meta["width"],
-                            height=v_meta["height"],
-                            write_timeout=300.0,
-                            read_timeout=300.0,
-                        )
-                        v_obj = m_sent.video or m_sent.animation or m_sent.document
-                        file_id = v_obj.file_id if v_obj else ""
-                        file_unique_id = v_obj.file_unique_id if v_obj else ""
-                        file_size = getattr(v_obj, "file_size", 0) or file_size_bytes
-                        width = getattr(v_obj, "width", 0) or v_meta["width"] or 0
-                        height = getattr(v_obj, "height", 0) or v_meta["height"] or 0
+                    v_meta = get_video_meta(item["path"])
+                    m_sent = await bot.send_video(
+                        chat_id=destination_chat_id,
+                        video=f,
+                        caption=caption_storage,
+                        parse_mode=ParseMode.HTML,
+                        supports_streaming=True,
+                        duration=v_meta["duration"],
+                        width=v_meta["width"],
+                        height=v_meta["height"],
+                        write_timeout=300.0,
+                        read_timeout=300.0,
+                    )
+                    v_obj = m_sent.video or m_sent.animation or m_sent.document
+                    file_id = v_obj.file_id if v_obj else ""
+                    file_unique_id = v_obj.file_unique_id if v_obj else ""
+                    file_size = getattr(v_obj, "file_size", 0) or 0
+                    width = getattr(v_obj, "width", 0) or v_meta["width"] or 0
+                    height = getattr(v_obj, "height", 0) or v_meta["height"] or 0
 
                 sent_messages.append(m_sent)
                 saved_media_records.append({
@@ -355,8 +316,6 @@ async def handle_instagram_message(update: Update, context: ContextTypes.DEFAULT
                     "width": width,
                     "height": height,
                 })
-
-        # Trường hợp 2: Album nhiều file (batch theo 10 phần tử)
         else:
             chunk_size = 10
             for i in range(0, len(media_files), chunk_size):
@@ -385,7 +344,7 @@ async def handle_instagram_message(update: Update, context: ContextTypes.DEFAULT
                         ))
 
                 try:
-                    msgs = await context.bot.send_media_group(
+                    msgs = await bot.send_media_group(
                         chat_id=destination_chat_id,
                         media=media_group,
                         write_timeout=300.0,
@@ -418,9 +377,9 @@ async def handle_instagram_message(update: Update, context: ContextTypes.DEFAULT
                     for fh in file_handles:
                         fh.close()
 
-        # 5. Lưu vào Database
+        # Lưu vào Database
         primary_message_id = sent_messages[0].message_id if sent_messages else None
-        user_id = user.id if user else None
+        user_id_val = user.id if user else None
         post_id = await database.save_post(
             shortcode=shortcode,
             url=download_result["url"],
@@ -429,11 +388,11 @@ async def handle_instagram_message(update: Update, context: ContextTypes.DEFAULT
             channel_id=destination_chat_id,
             channel_message_id=primary_message_id,
             total_media=len(saved_media_records),
-            downloaded_by_user_id=user_id,
+            downloaded_by_user_id=user_id_val,
         )
         await database.save_media_items(post_id, saved_media_records)
 
-        # 6. Phản hồi cho người dùng nếu gửi trong chat riêng
+        # Phản hồi trong chat riêng nếu có
         if status_msg:
             channel_link = format_channel_post_link(destination_chat_id, primary_message_id)
             keyboard = [
@@ -455,27 +414,184 @@ async def handle_instagram_message(update: Update, context: ContextTypes.DEFAULT
                 reply_markup=reply_markup,
             )
 
-    except Exception as e:
-        logger.error(f"Error handling media message: {e}", exc_info=True)
-        if status_msg:
-            error_msg = f"❌ <b>Lỗi khi tải hoặc lưu ảnh:</b>\n<code>{html.escape(str(e))}</code>"
-            await status_msg.edit_text(error_msg, parse_mode=ParseMode.HTML)
-        elif is_channel:
-            # Gửi thông báo lỗi tạm thời vào kênh và tự động xóa sau 15 giây để admin biết nguyên nhân lỗi
-            try:
-                err_noti = await context.bot.send_message(
-                    chat_id=msg.chat_id,
-                    text=f"⚠️ <b>Không thể xử lý liên kết:</b>\n<code>{html.escape(str(e))}</code>",
-                    parse_mode=ParseMode.HTML,
-                    reply_to_message_id=msg.message_id,
-                )
-                asyncio.create_task(self_destruct_message(context.bot, msg.chat_id, err_noti.message_id, delay=15))
-            except Exception:
-                pass
+        return True
 
     finally:
         if download_result and "target_dir" in download_result:
             clean_download_dir(download_result["target_dir"])
+
+
+async def handle_instagram_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Xử lý tin nhắn chứa liên kết Instagram hoặc Twitter/X (cả từ chat riêng và từ kênh lưu trữ)."""
+    msg = update.effective_message
+    if not msg:
+        return
+
+    text = msg.text or msg.caption or ""
+    targets = extract_all_media_targets(text)
+    if not targets:
+        return
+
+    is_channel = update.channel_post is not None or (update.effective_chat and update.effective_chat.type == ChatType.CHANNEL)
+    user = update.effective_user
+
+    # Nếu từ chat riêng, kiểm tra quyền
+    if not is_channel and user and not is_user_allowed(user.id):
+        await msg.reply_text("⛔ Bạn không có quyền sử dụng bot này.")
+        return
+
+    status_msg = None
+    if not is_channel:
+        status_msg = await msg.reply_text(
+            f"⏳ <b>Đang lấy media từ {len(targets)} liên kết...</b>" if len(targets) > 1 else "⏳ <b>Đang lấy media chất lượng cao từ liên kết...</b>",
+            parse_mode=ParseMode.HTML,
+        )
+
+    destination_chat_id = update.effective_chat.id if is_channel else (TELEGRAM_STORAGE_CHANNEL_ID or update.effective_chat.id)
+
+    success_count = 0
+    for target in targets:
+        try:
+            ok = await process_single_target(
+                bot=context.bot,
+                target=target,
+                destination_chat_id=destination_chat_id,
+                original_msg_chat_id=msg.chat_id,
+                original_msg_id=msg.message_id,
+                user=user,
+                status_msg=status_msg if len(targets) == 1 else None,
+            )
+            if ok:
+                success_count += 1
+        except Exception as e:
+            logger.error(f"Lỗi khi xử lý link {target.get('url')}: {e}", exc_info=True)
+            if status_msg and len(targets) == 1:
+                await status_msg.edit_text(f"❌ <b>Lỗi khi tải hoặc lưu ảnh:</b>\n<code>{html.escape(str(e))}</code>", parse_mode=ParseMode.HTML)
+            elif is_channel:
+                try:
+                    err_noti = await context.bot.send_message(
+                        chat_id=msg.chat_id,
+                        text=f"⚠️ <b>Không thể xử lý liên kết:</b>\n<code>{html.escape(str(e))}</code>",
+                        parse_mode=ParseMode.HTML,
+                        reply_to_message_id=msg.message_id,
+                    )
+                    asyncio.create_task(self_destruct_message(context.bot, msg.chat_id, err_noti.message_id, delay=15))
+                except Exception:
+                    pass
+
+    # Nếu có nhiều link trong 1 tin nhắn, báo tổng kết trong chat riêng
+    if status_msg and len(targets) > 1:
+        await status_msg.edit_text(
+            f"✅ <b>Đã xử lý xong {success_count}/{len(targets)} bài viết!</b>",
+            parse_mode=ParseMode.HTML,
+        )
+
+
+async def scan_and_process_channel_backlog(bot, limit: int = 60) -> int:
+    """
+    Quét ngược các tin nhắn trong kênh lưu trữ để phát hiện và xử lý toàn bộ các link
+    Instagram & Twitter/X chưa được xử lý (ví dụ lúc bot offline hoặc gửi qua phím tắt).
+    Sử dụng kỹ thuật forwardMessage để đọc nội dung tin nhắn trong kênh.
+    """
+    if not TELEGRAM_STORAGE_CHANNEL_ID:
+        logger.warning("Chưa cấu hình TELEGRAM_STORAGE_CHANNEL_ID để quét kênh.")
+        return 0
+
+    channel_id = TELEGRAM_STORAGE_CHANNEL_ID
+    # 1. Gửi tin nhắn canary để lấy message_id cao nhất hiện tại của kênh
+    try:
+        canary = await bot.send_message(chat_id=channel_id, text="🔍 [Scanner Active]")
+        highest_id = canary.message_id
+        await bot.delete_message(chat_id=channel_id, message_id=highest_id)
+    except Exception as e_canary:
+        logger.warning(f"Không thể lấy message_id cao nhất trong kênh: {e_canary}")
+        return 0
+
+    start_id = max(1, highest_id - limit)
+    logger.info(f"🔎 Bắt đầu quét kênh {channel_id} từ message_id {start_id} đến {highest_id} (tối đa {limit} tin)...")
+
+    processed_count = 0
+    for mid in range(start_id, highest_id):
+        try:
+            # Dùng forwardMessage tạm thời vào kênh để đọc được text của tin nhắn
+            fwd = await bot.forward_message(
+                chat_id=channel_id,
+                from_chat_id=channel_id,
+                message_id=mid,
+            )
+            raw_text = fwd.text or fwd.caption or ""
+            fwd_id = fwd.message_id
+            # Xóa ngay tin nhắn forward tạm
+            await bot.delete_message(chat_id=channel_id, message_id=fwd_id)
+
+            # Bỏ qua nếu tin nhắn này là bài đăng đã lưu của bot (có chứa 'Lưu Trữ' hoặc không có link)
+            if "Lưu Trữ" in raw_text and ("Tác giả:" in raw_text or "Số lượng:" in raw_text):
+                continue
+
+            targets = extract_all_media_targets(raw_text)
+            if targets:
+                logger.info(f"🎯 Phát hiện {len(targets)} link tồn đọng tại message_id {mid}: {raw_text[:60]}")
+                for target in targets:
+                    try:
+                        success = await process_single_target(
+                            bot=bot,
+                            target=target,
+                            destination_chat_id=channel_id,
+                            original_msg_chat_id=channel_id,
+                            original_msg_id=mid,
+                        )
+                        if success:
+                            processed_count += 1
+                    except Exception as e_proc:
+                        logger.error(f"Lỗi khi xử lý link tồn đọng {target['url']}: {e_proc}")
+
+                # Đảm bảo tin nhắn link gốc được xóa sau khi xử lý
+                try:
+                    await bot.delete_message(chat_id=channel_id, message_id=mid)
+                except Exception:
+                    pass
+
+        except Exception:
+            # Tin nhắn không tồn tại hoặc đã bị xóa -> bỏ qua
+            continue
+
+    logger.info(f"✅ Quét xong kênh! Đã xử lý thành công {processed_count} bài viết tồn đọng.")
+    return processed_count
+
+
+async def scan_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Lệnh /scan: Quét và xử lý toàn bộ link tồn đọng trên Kênh lưu trữ."""
+    user = update.effective_user
+    if user and not is_user_allowed(user.id):
+        return
+
+    msg = update.effective_message
+    status_msg = None
+    if msg:
+        status_msg = await msg.reply_text("🔍 <b>Đang quét kênh lưu trữ để tìm các bài đăng chưa xử lý...</b>", parse_mode=ParseMode.HTML)
+
+    count = await scan_and_process_channel_backlog(context.bot, limit=60)
+
+    if status_msg:
+        if count > 0:
+            await status_msg.edit_text(f"🎉 <b>Quét hoàn tất!</b>\nĐã phát hiện và tải thành công <b>{count}</b> bài viết tồn đọng vào kho.", parse_mode=ParseMode.HTML)
+        else:
+            await status_msg.edit_text("✅ <b>Kênh lưu trữ sạch sẽ!</b> Không có link tồn đọng nào cần xử lý.", parse_mode=ParseMode.HTML)
+
+
+async def post_init_callback(application: Application):
+    """Chạy ngầm sau khi bot khởi động để tự động quét link tồn đọng."""
+    async def _auto_scan():
+        await asyncio.sleep(5)  # Đợi bot ổn định kết nối
+        logger.info("🚀 Tự động kích hoạt quét link tồn đọng trên kênh lưu trữ khi khởi động...")
+        try:
+            count = await scan_and_process_channel_backlog(application.bot, limit=60)
+            if count > 0:
+                logger.info(f"🎉 Tự động dọn dẹp và xử lý thành công {count} bài viết tồn đọng trên kênh!")
+        except Exception as e:
+            logger.warning(f"Lỗi khi tự động quét kênh lúc khởi động: {e}")
+
+    asyncio.create_task(_auto_scan())
 
 
 def create_bot_application() -> Application:
@@ -485,7 +601,7 @@ def create_bot_application() -> Application:
             "Chưa cấu hình TELEGRAM_BOT_TOKEN! Hãy tạo file .env và điền Token từ @BotFather."
         )
 
-    # Tăng timeout lên 300 giây để TX3 Mini upload các album ảnh 4K/video dài nặng qua Wi-Fi không bị ngắt TimedOut
+    # Tăng timeout lên 300 giây để TX3 Mini upload các album ảnh 4K qua Wi-Fi không bị ngắt TimedOut
     request = HTTPXRequest(
         connect_timeout=60.0,
         read_timeout=300.0,
@@ -493,11 +609,20 @@ def create_bot_application() -> Application:
         pool_timeout=60.0,
     )
 
-    app = Application.builder().token(TELEGRAM_BOT_TOKEN).request(request).build()
+    # Kích hoạt concurrent_updates=3: Cho phép TX3 Mini xử lý đồng thời 3 link song song
+    app = (
+        Application.builder()
+        .token(TELEGRAM_BOT_TOKEN)
+        .request(request)
+        .concurrent_updates(3)
+        .post_init(post_init_callback)
+        .build()
+    )
 
     # Đăng ký các command
     app.add_handler(CommandHandler("start", start_command))
     app.add_handler(CommandHandler("help", help_command))
+    app.add_handler(CommandHandler("scan", scan_command))
     app.add_handler(CommandHandler("stats", stats_command))
     app.add_handler(CommandHandler("recent", recent_command))
     app.add_handler(CommandHandler("status", status_command))

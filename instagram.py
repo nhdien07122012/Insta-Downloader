@@ -67,6 +67,53 @@ def extract_media_target(url_or_text: str) -> Optional[Dict[str, Any]]:
     return None
 
 
+def extract_all_media_targets(url_or_text: str) -> List[Dict[str, Any]]:
+    """Trích xuất tất cả các bài viết từ văn bản chứa một hoặc nhiều link Instagram hoặc Twitter/X."""
+    targets = []
+    seen_ids = set()
+
+    # 1. Instagram links
+    for m in INSTA_URL_PATTERN.finditer(url_or_text):
+        shortcode = m.group(1)
+        if shortcode not in seen_ids:
+            seen_ids.add(shortcode)
+            targets.append({
+                "platform": "instagram",
+                "id": shortcode,
+                "url": f"https://www.instagram.com/p/{shortcode}/",
+            })
+
+    # 2. Twitter / X links
+    for m in TWITTER_URL_PATTERN.finditer(url_or_text):
+        username = m.group(1) or "i"
+        tweet_id = m.group(2)
+        if tweet_id not in seen_ids:
+            seen_ids.add(tweet_id)
+            targets.append({
+                "platform": "twitter",
+                "id": tweet_id,
+                "username": username,
+                "url": f"https://x.com/{username}/status/{tweet_id}",
+            })
+
+    # 3. t.co links
+    for m in re.finditer(r"https?://t\.co/[a-zA-Z0-9]+", url_or_text):
+        tco_url = m.group(0)
+        try:
+            import requests
+            r = requests.head(tco_url, allow_redirects=True, timeout=5)
+            if r.status_code in (200, 301, 302, 307, 308) and r.url:
+                sub_targets = extract_all_media_targets(r.url)
+                for st in sub_targets:
+                    if st["id"] not in seen_ids:
+                        seen_ids.add(st["id"])
+                        targets.append(st)
+        except Exception:
+            pass
+
+    return targets
+
+
 def extract_shortcode(url_or_text: str) -> Optional[str]:
     """Trích xuất mã bài viết từ Instagram hoặc Twitter/X (tương thích ngược hoàn toàn)."""
     target = extract_media_target(url_or_text)
