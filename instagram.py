@@ -16,9 +16,9 @@ from config import (
     RAPIDAPI_KEY,
 )
 
-# Regex tìm kiếm link Instagram (post hoặc reel)
+# Regex tìm kiếm link Instagram (post hoặc reel, hỗ trợ cả định dạng share mới)
 INSTA_URL_PATTERN = re.compile(
-    r"https?://(?:www\.)?instagram\.com/(?:p|reel|tv)/([a-zA-Z0-9_-]+)/?",
+    r"https?://(?:www\.)?instagram\.com/(?:share/)?(?:p|reel|tv)/([a-zA-Z0-9_-]+)/?",
     re.IGNORECASE,
 )
 
