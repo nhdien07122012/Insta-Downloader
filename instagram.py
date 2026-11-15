@@ -19,31 +19,36 @@ _orig_getaddrinfo = socket.getaddrinfo
 _dns_cache = {}
 
 def secure_doh_getaddrinfo(host, port, family=0, type=0, proto=0, flags=0):
-    if any(d in host for d in ("twimg.com", "twitter.com", "x.com", "fxtwitter.com", "fixupx.com")):
-        if host in _dns_cache:
-            ip = _dns_cache[host]
-            return [(socket.AF_INET, socket.SOCK_STREAM, 6, "", (ip, port))]
+    try:
+        if host is not None:
+            host_str = host.decode("utf-8", "ignore") if isinstance(host, bytes) else str(host)
+            if any(d in host_str.lower() for d in ("twimg.com", "twitter.com", "x.com", "fxtwitter.com", "fixupx.com")):
+                if host_str in _dns_cache:
+                    ip = _dns_cache[host_str]
+                    return _orig_getaddrinfo(ip, port, family, type, proto, flags)
 
-        # Sử dụng Cloudflare DoH (1.1.1.1) và Google DoH (8.8.8.8) mã hóa cổng 443
-        doh_endpoints = [
-            f"https://1.1.1.1/dns-query?name={host}&type=A",
-            f"https://8.8.8.8/resolve?name={host}&type=A",
-        ]
-        for ep in doh_endpoints:
-            try:
-                req = urllib.request.Request(
-                    ep,
-                    headers={"Accept": "application/dns-json", "User-Agent": "Mozilla/5.0"}
-                )
-                with urllib.request.urlopen(req, timeout=3) as r:
-                    data = json.loads(r.read().decode())
-                    for ans in data.get("Answer", []):
-                        if ans.get("type") == 1:  # Record A (IPv4)
-                            ip = ans.get("data")
-                            _dns_cache[host] = ip
-                            return [(socket.AF_INET, socket.SOCK_STREAM, 6, "", (ip, port))]
-            except Exception:
-                continue
+                # Sử dụng Cloudflare DoH (1.1.1.1) và Google DoH (8.8.8.8) mã hóa cổng 443
+                doh_endpoints = [
+                    f"https://1.1.1.1/dns-query?name={host_str}&type=A",
+                    f"https://8.8.8.8/resolve?name={host_str}&type=A",
+                ]
+                for ep in doh_endpoints:
+                    try:
+                        req = urllib.request.Request(
+                            ep,
+                            headers={"Accept": "application/dns-json", "User-Agent": "Mozilla/5.0"}
+                        )
+                        with urllib.request.urlopen(req, timeout=3) as r:
+                            data = json.loads(r.read().decode())
+                            for ans in data.get("Answer", []):
+                                if ans.get("type") == 1:  # Record A (IPv4)
+                                    ip = ans.get("data")
+                                    _dns_cache[host_str] = ip
+                                    return _orig_getaddrinfo(ip, port, family, type, proto, flags)
+                    except Exception:
+                        continue
+    except Exception:
+        pass
 
     return _orig_getaddrinfo(host, port, family, type, proto, flags)
 

@@ -16,6 +16,7 @@ from telegram import (
     BotCommand,
     BotCommandScopeDefault,
     BotCommandScopeAllChatAdministrators,
+    MenuButtonCommands,
 )
 from telegram.error import RetryAfter, TimedOut, NetworkError
 from telegram.request import HTTPXRequest
@@ -629,8 +630,8 @@ async def scan_and_process_channel_backlog(bot, limit: int = 60) -> int:
             # Xóa ngay tin nhắn forward tạm
             await bot.delete_message(chat_id=channel_id, message_id=fwd_id)
 
-            # Dọn dẹp tin nhắn lệnh /scan cũ nếu còn tồn tại trong kênh
-            if raw_text.startswith("/scan"):
+            # Dọn dẹp tin nhắn lệnh /scan cũ nếu còn tồn tại trong kênh (bất kể viết hoa /Scan hay /scan)
+            if raw_text.lower().startswith("/scan"):
                 try:
                     await bot.delete_message(chat_id=channel_id, message_id=mid)
                 except Exception:
@@ -760,16 +761,17 @@ async def post_init_callback(application: Application):
     try:
         await application.bot.set_my_commands(bot_commands)
         await application.bot.set_my_commands(bot_commands, scope=BotCommandScopeAllChatAdministrators())
-        logger.info("✅ Đã đồng bộ menu lệnh bot lên Telegram thành công!")
+        await application.bot.set_chat_menu_button(menu_button=MenuButtonCommands())
+        logger.info("✅ Đã đồng bộ menu lệnh và nút Menu bot lên Telegram thành công!")
     except Exception as e:
         logger.warning(f"Lỗi khi đồng bộ menu lệnh bot: {e}")
 
-    # 2. Tự động quét 20 tin nhắn gần nhất lúc khởi động để dọn sạch link tồn đọng
+    # 2. Tự động quét 30 tin nhắn gần nhất lúc khởi động để dọn sạch link tồn đọng
     async def _auto_scan():
         await asyncio.sleep(5)  # Đợi bot ổn định kết nối
         logger.info("🚀 Tự động kích hoạt quét link tồn đọng trên kênh lưu trữ khi khởi động...")
         try:
-            count = await scan_and_process_channel_backlog(application.bot, limit=20)
+            count = await scan_and_process_channel_backlog(application.bot, limit=30)
             if count > 0:
                 logger.info(f"🎉 Tự động dọn dẹp và xử lý thành công {count} bài viết tồn đọng trên kênh!")
         except Exception as e:
@@ -811,8 +813,8 @@ def create_bot_application() -> Application:
     app.add_handler(CommandHandler("recent", recent_command, filters=filters.ALL))
     app.add_handler(CommandHandler("status", status_command, filters=filters.ALL))
 
-    # Đảm bảo lệnh /scan luôn được bắt kể cả khi gửi dạng văn bản thường trong Kênh
-    app.add_handler(MessageHandler(filters.Regex(r"^/scan(?:\s|@|$)"), scan_command))
+    # Đảm bảo lệnh /scan luôn được bắt kể cả khi gửi dạng văn bản thường trong Kênh (hỗ trợ cả /Scan chữ hoa do bàn phím iOS)
+    app.add_handler(MessageHandler(filters.Regex(re.compile(r"^/scan(?:\s|@|$)", re.IGNORECASE)), scan_command))
 
     # Đăng ký message handler nhận link Instagram & Twitter/X (cả tin nhắn thường, caption và tin trong channel)
     url_pattern = re.compile(r"(instagram\.com|twitter\.com|x\.com|t\.co)", re.IGNORECASE)

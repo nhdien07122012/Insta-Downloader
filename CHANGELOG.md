@@ -4,6 +4,33 @@ Toàn bộ các phiên bản cập nhật, mã bản dựng (build number), chi 
 
 ---
 
+## [v1.5.5 (Build 20)] - 2026-11-15
+- **Commit SHA**: (Sẽ cập nhật sau khi push)
+- **Mục tiêu**: 
+  1. **Khắc phục lỗi tê liệt bot do `TypeError: a bytes-like object is required, not 'str'`**: Khi `python-telegram-bot` và thư viện mạng `anyio` kết nối tới `api.telegram.org`, tham số host được truyền dưới dạng `bytes`. Hàm monkey-patch DoH trước đây kiểm tra `"twimg.com" in host` khiến bot bị crash ngay khi khởi động, dẫn đến việc bot không phản hồi bất kỳ tin nhắn, link hay lệnh `/scan` nào trên Telegram.
+  2. **Hỗ trợ lệnh `/Scan` chữ hoa (iOS Keyboard)**: Khi người dùng gõ `/Scan` trên bàn phím iPhone thường tự động viết hoa chữ `S`, bộ lọc regex cũ chỉ bắt chữ thường khiến lệnh bị bỏ qua. Bổ sung `re.IGNORECASE` để nhận diện cả `/scan`, `/Scan`, `/SCAN`.
+  3. **Tích hợp nút Menu Bot Telegram (`setChatMenuButton`)**: Tự động kích hoạt nút `Menu` dạng thanh pill màu xanh lá cây ở góc dưới bên trái khung chat bot, cho phép người dùng bấm xem và chọn nhanh các lệnh `/scan`, `/stats`, `/recent`, `/status`.
+  4. **Tăng cường khả năng xử lý link đồng loạt (Concurrency & Auto-Backlog Scanner)**: Cho phép TX3 Mini xử lý đồng thời 3 link song song (`concurrent_updates=3`), tự động quét 30 tin nhắn gần nhất khi khởi động (`_auto_scan`) để giải quyết toàn bộ các link Twitter/X và Instagram bị dồn ứ lúc bot offline.
+- **Chi tiết thay đổi**:
+  - `instagram.py`:
+    - Xử lý kiểu dữ liệu an toàn cho `host`: Chuyển đổi `bytes` sang `str` trước khi kiểm tra tên miền `twimg.com`, `x.com`...
+    - Bọc `try... except` toàn diện quanh khối phân giải DoH, bảo đảm nếu DoH gặp bất kỳ lỗi gì thì luôn fallback về DNS gốc mà không bao giờ làm sập tiến trình bot.
+    - Trả kết quả IP qua `_orig_getaddrinfo(ip, port, family, type, proto, flags)` để đảm bảo tương thích chuẩn socket C của Python.
+  - `bot.py`:
+    - Đăng ký `set_chat_menu_button(menu_button=MenuButtonCommands())` trong `post_init_callback`.
+    - Cập nhật Regex handler của `/scan` với cờ `re.IGNORECASE`.
+    - Cập nhật bộ lọc dọn dẹp tin nhắn `/scan` trong `scan_and_process_channel_backlog` với `raw_text.lower().startswith("/scan")`.
+    - Tăng độ sâu quét tự động lúc khởi động lên 30 tin nhắn.
+  - `ios-photo-app`:
+    - Cập nhật phiên bản lên `v1.5.5 Build 20`.
+- **Link tải IPA trực tiếp**: [https://github.com/nhdien07122012/Insta-Downloader/releases/latest/download/InstaPhotos.ipa](https://github.com/nhdien07122012/Insta-Downloader/releases/latest/download/InstaPhotos.ipa)
+- **Lệnh hoàn tác mẫu (Rollback)**:
+  ```bash
+  git revert HEAD --no-edit
+  ```
+
+---
+
 ## [v1.5.4 (Build 19)] - 2026-11-15
 - **Commit SHA**: `d4b3e5f`
 - **Mục tiêu**: Khắc phục triệt để lỗi **không tải được link 𝕏 (Twitter)** trên box TX3 Mini (trong khi link Instagram vẫn hoạt động bình thường). Tích hợp cơ chế **DNS-over-HTTPS (DoH)** tự động phân giải tên miền `pbs.twimg.com`, `api.fxtwitter.com` qua Cloudflare `1.1.1.1` và Google `8.8.8.8` (cổng 443 mã hóa), vượt qua hoàn toàn tình trạng các nhà mạng Việt Nam (VNPT, Viettel, FPT) chặn phân giải DNS tên miền Twitter/X trên router gia đình. Bổ sung cơ chế tải ảnh dự phòng đa tầng qua CDN proxy `d.fxtwitter.com` và `d.fixupx.com`.
