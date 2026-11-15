@@ -4,6 +4,31 @@ Toàn bộ các phiên bản cập nhật, mã bản dựng (build number), chi 
 
 ---
 
+## [v1.5.3 (Build 18)] - 2026-11-15
+- **Commit SHA**: `cập nhật hiện tại`
+- **Mục tiêu**: Tích hợp tính năng **Gửi lệnh `/scan` trực tiếp từ ứng dụng iOS InstaPhotos**: Tự động gửi lệnh quét kênh (`/scan 20`) khi người dùng kéo màn hình xuống để làm mới (Pull-to-refresh) hoặc bấm nút Làm mới trên thanh tiêu đề (Header). Cho phép bot TX3 Mini phát hiện, tải và đẩy trọn bộ ảnh từ các link tồn đọng vào kho lưu trữ trước khi đồng bộ ảnh mới nhất về máy. Bổ sung nút quét thủ công nhanh (`[Quét 20 tin]`, `[Quét 50 tin]`) ngay trong Cài đặt.
+- **Chi tiết thay đổi**:
+  - `ios-photo-app/src/services/telegramClient.ts`:
+    - Thêm hàm `triggerChannelScan(config, limit = 20)` sử dụng MTProto client của tài khoản người dùng gửi lệnh `/scan [limit]` trực tiếp vào Kênh lưu trữ.
+  - `ios-photo-app/src/components/Header.tsx`:
+    - Thêm nút **Làm mới & Quét (/scan)** (`RefreshCw`) ngay cạnh nút Cài đặt trên thanh tiêu đề với hiệu ứng xoay (spin animation).
+  - `ios-photo-app/src/App.tsx`:
+    - Tích hợp `handleRefreshAndScan`: Khi kéo làm mới hoặc bấm nút Refresh, app tự động gửi `/scan 20` đến Kênh, chờ bot TX3 Mini cào ảnh, sau đó tải dữ liệu mới nhất vào bộ nhớ đệm máy (IndexedDB).
+    - Cập nhật dòng trạng thái kéo làm mới: hiển thị `"🤖 Đang gửi lệnh /scan & quét link tồn đọng..."`.
+    - Bổ sung thanh thông báo nổi (floating toast) báo trạng thái quét và làm mới kho ảnh.
+  - `ios-photo-app/src/components/SettingsModal.tsx`:
+    - Thêm cụm công cụ **"Quét link tồn đọng trên Kênh (/scan)"** với 2 nút thao tác nhanh `[Quét 20 tin gần nhất]` và `[Quét 50 tin]`.
+    - Chân trang hiển thị `InstaPhotos v1.5.3 • Build 18 (In-App /scan & Refresh Trigger)`.
+  - `ios-photo-app/package.json` & `ios-photo-app/ios/App/App.xcodeproj/project.pbxproj`:
+    - Nâng phiên bản lên `"1.5.3"` (Build 18).
+- **Link tải IPA trực tiếp**: [https://github.com/nhdien07122012/Insta-Downloader/releases/latest/download/InstaPhotos.ipa](https://github.com/nhdien07122012/Insta-Downloader/releases/latest/download/InstaPhotos.ipa)
+- **Lệnh hoàn tác mẫu (Rollback)**:
+  ```bash
+  git revert HEAD --no-edit
+  ```
+
+---
+
 ## [v1.5.2 (Build 17)] - 2026-11-15
 - **Commit SHA**: `c2ea824`
 - **Mục tiêu**: 

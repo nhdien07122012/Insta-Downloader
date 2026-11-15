@@ -1,11 +1,13 @@
 import React from "react";
-import { Settings } from "lucide-react";
+import { Settings, RefreshCw } from "lucide-react";
 
 interface HeaderProps {
   photoCount: number;
   onOpenSettings: () => void;
   activeFilter: string;
   onFilterChange: (filter: string) => void;
+  onRefresh?: () => void;
+  isRefreshing?: boolean;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -13,6 +15,8 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenSettings,
   activeFilter,
   onFilterChange,
+  onRefresh,
+  isRefreshing = false,
 }) => {
   return (
     <header className="sticky top-0 z-30 pt-[var(--sat)] bg-black/90 backdrop-blur-md border-b border-neutral-800 transition-colors">
@@ -27,6 +31,16 @@ export const Header: React.FC<HeaderProps> = ({
         </div>
 
         <div className="flex items-center gap-2">
+          {onRefresh && (
+            <button
+              onClick={onRefresh}
+              disabled={isRefreshing}
+              className="w-9 h-9 flex items-center justify-center rounded-full bg-neutral-800/80 active:bg-neutral-700 text-cyan-400 transition-colors disabled:opacity-50"
+              title="Làm mới & Quét link tồn đọng (/scan)"
+            >
+              <RefreshCw className={`w-4 h-4 ${isRefreshing ? "animate-spin" : ""}`} />
+            </button>
+          )}
           <button
             onClick={onOpenSettings}
             className="w-9 h-9 flex items-center justify-center rounded-full bg-neutral-800/80 active:bg-neutral-700 text-neutral-300 transition-colors"

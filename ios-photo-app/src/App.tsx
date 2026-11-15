@@ -5,6 +5,7 @@ import {
   saveStoredConfig,
   fetchChannelPhotos,
   deleteTelegramPhoto,
+  triggerChannelScan,
 } from "./services/telegramClient";
 import {
   getCachedPhotosFromDB,
@@ -50,13 +51,54 @@ export const App: React.FC = () => {
   const [addUrl, setAddUrl] = useState("");
   const [clipboardPrompt, setClipboardPrompt] = useState<string | null>(null);
 
-  // Pull-to-Refresh State
+  // Scan & Pull-to-Refresh State
   const [pullDistance, setPullDistance] = useState(0);
   const [isPulling, setIsPulling] = useState(false);
+  const [isScanning, setIsScanning] = useState(false);
+  const [scanToast, setScanToast] = useState<string | null>(null);
   const touchStartY = useRef<number | null>(null);
 
+  const handleRefreshAndScan = async () => {
+    if (loading || isScanning) return;
+    setIsScanning(true);
+    setLoading(true);
+    setErrorMessage("");
+
+    try {
+      // 1. Gửi lệnh /scan đến Kênh lưu trữ qua MTProto nếu đã đăng nhập
+      if (config.isLoggedIn || config.sessionString) {
+        const sent = await triggerChannelScan(config, 20);
+        if (sent) {
+          setScanToast("🔍 Đang gửi /scan để quét link tồn đọng...");
+          // Đợi 2.5s để bot trên TX3 Mini kịp đọc tin và kéo ảnh
+          await new Promise((r) => setTimeout(r, 2500));
+        }
+      }
+
+      // 2. Tải danh sách ảnh mới nhất từ Kênh về máy
+      await loadPhotos(false);
+
+      if (config.isLoggedIn || config.sessionString) {
+        setScanToast("🎉 Đã quét & làm mới kho ảnh thành công!");
+        setTimeout(() => setScanToast(null), 3000);
+
+        // Đợt tải phụ sau 4s phòng trường hợp bot TX3 Mini đang hoàn thành album lớn
+        setTimeout(async () => {
+          try {
+            await loadPhotos(true);
+          } catch {}
+        }, 4000);
+      }
+    } catch (err: any) {
+      console.warn("Lỗi khi quét và làm mới ảnh:", err);
+    } finally {
+      setIsScanning(false);
+      setLoading(false);
+    }
+  };
+
   const handleTouchStart = (e: React.TouchEvent) => {
-    if (window.scrollY <= 5 && !loading) {
+    if (window.scrollY <= 5 && !loading && !isScanning) {
       touchStartY.current = e.touches[0].clientY;
       setIsPulling(true);
     } else {
@@ -65,7 +107,7 @@ export const App: React.FC = () => {
   };
 
   const handleTouchMove = (e: React.TouchEvent) => {
-    if (touchStartY.current === null || loading) return;
+    if (touchStartY.current === null || loading || isScanning) return;
     const currentY = e.touches[0].clientY;
     const diff = currentY - touchStartY.current;
     if (diff > 0 && window.scrollY <= 5) {
@@ -80,9 +122,9 @@ export const App: React.FC = () => {
     if (touchStartY.current === null) return;
     setIsPulling(false);
     touchStartY.current = null;
-    if (pullDistance >= 55 && !loading) {
+    if (pullDistance >= 55 && !loading && !isScanning) {
       setPullDistance(55);
-      await loadPhotos();
+      await handleRefreshAndScan();
     }
     setPullDistance(0);
   };
@@ -351,7 +393,17 @@ export const App: React.FC = () => {
           setActiveFilter(f);
           if (currentTab !== "library") setCurrentTab("library");
         }}
+        onRefresh={handleRefreshAndScan}
+        isRefreshing={loading || isScanning}
       />
+
+      {/* Floating Scan Toast */}
+      {scanToast && (
+        <div className="fixed top-14 left-1/2 -translate-x-1/2 z-50 px-4 py-2 bg-neutral-900/95 border border-cyan-500/40 text-cyan-300 text-xs font-medium rounded-full shadow-2xl backdrop-blur-md flex items-center gap-2 animate-in fade-in slide-in-from-top-2 duration-200">
+          <Sparkles className="w-3.5 h-3.5 text-cyan-400 animate-spin" />
+          <span>{scanToast}</span>
+        </div>
+      )}
 
       {/* Main Content Area with Pull-To-Refresh */}
       <main
@@ -374,13 +426,15 @@ export const App: React.FC = () => {
                 transform: `rotate(${pullDistance * 4}deg)`,
               }}
               className={`w-4 h-4 text-cyan-400 ${
-                pullDistance >= 55 || loading ? "animate-spin" : ""
+                pullDistance >= 55 || loading || isScanning ? "animate-spin" : ""
               }`}
             />
             <span>
-              {pullDistance >= 55 || loading
+              {isScanning
+                ? "🤖 Đang gửi lệnh /scan & quét link tồn đọng..."
+                : pullDistance >= 55 || loading
                 ? "Đang làm mới ảnh từ Telegram..."
-                : "Kéo xuống để làm mới"}
+                : "Kéo xuống để quét /scan & làm mới"}
             </span>
           </div>
         </div>

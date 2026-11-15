@@ -467,6 +467,37 @@ export async function sendInstagramLinkToChannel(
 export const sendMediaLinkToChannel = sendInstagramLinkToChannel;
 
 /**
+ * Gửi lệnh /scan đến Kênh lưu trữ qua Telegram MTProto để kích hoạt bot TX3 Mini quét & tải link tồn đọng
+ */
+export async function triggerChannelScan(
+  config: TelegramConfig,
+  limit: number = 20
+): Promise<boolean> {
+  if (!config.sessionString && !config.isLoggedIn) {
+    return false;
+  }
+  try {
+    const client = await initTelegramClient(config);
+    let targetPeer: any = config.channelId;
+    try {
+      targetPeer = await client.getEntity(config.channelId);
+    } catch {
+      try {
+        targetPeer = await client.getEntity(BigInt(config.channelId));
+      } catch {
+        targetPeer = config.channelId;
+      }
+    }
+    const cmd = limit && limit !== 20 ? `/scan ${limit}` : `/scan`;
+    await client.sendMessage(targetPeer, { message: cmd });
+    return true;
+  } catch (err) {
+    console.warn("Lỗi gửi lệnh /scan đến Kênh qua MTProto:", err);
+    return false;
+  }
+}
+
+/**
  * Xóa tin nhắn ảnh vĩnh viễn trên Kênh Telegram
  */
 export async function deleteTelegramPhoto(

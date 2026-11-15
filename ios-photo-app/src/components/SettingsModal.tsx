@@ -19,12 +19,14 @@ import {
   Download,
   Copy,
   FileText,
+  Sparkles,
 } from "lucide-react";
 import { Share } from "@capacitor/share";
 import {
   requestTelegramCode,
   verifyTelegramCode,
   logoutTelegram,
+  triggerChannelScan,
 } from "../services/telegramClient";
 import { getCacheStats, clearPhotoCache } from "../services/photoStorage";
 
@@ -60,6 +62,31 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     count: 0,
     sizeMB: "0",
   });
+  const [isScanningModal, setIsScanningModal] = useState(false);
+  const [scanModalMsg, setScanModalMsg] = useState("");
+
+  const handleManualScan = async (limit: number = 20) => {
+    if (isScanningModal) return;
+    setIsScanningModal(true);
+    setScanModalMsg(`Đang gửi lệnh /scan ${limit} đến Kênh...`);
+    try {
+      const ok = await triggerChannelScan(formData, limit);
+      if (ok) {
+        setScanModalMsg(`✅ Đã gửi /scan ${limit}! Bot TX3 Mini đang quét Kênh...`);
+      } else {
+        setScanModalMsg("⚠️ Cần đăng nhập Telegram cá nhân để gửi lệnh.");
+      }
+    } catch {
+      setScanModalMsg("❌ Gặp lỗi khi gửi lệnh /scan.");
+    } finally {
+      setTimeout(() => {
+        setIsScanningModal(false);
+      }, 1200);
+      setTimeout(() => {
+        setScanModalMsg("");
+      }, 5000);
+    }
+  };
 
   useEffect(() => {
     if (isOpen) {
@@ -474,6 +501,45 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               />
             </div>
 
+            {/* Quick Trigger /scan button */}
+            {formData.isLoggedIn && (
+              <div className="p-3 bg-cyan-950/20 border border-cyan-800/40 rounded-xl space-y-2">
+                <div>
+                  <h4 className="text-xs font-semibold text-cyan-300 flex items-center gap-1.5">
+                    <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
+                    Quét link tồn đọng trên Kênh (/scan)
+                  </h4>
+                  <p className="text-[11px] text-neutral-400 mt-0.5 leading-relaxed">
+                    Kích hoạt bot TX3 Mini quét các link X / Instagram đang chờ xử lý trên Kênh lưu trữ.
+                  </p>
+                </div>
+                <div className="flex gap-2 pt-0.5">
+                  <button
+                    type="button"
+                    onClick={() => handleManualScan(20)}
+                    disabled={isScanningModal}
+                    className="flex-1 py-1.5 px-2.5 bg-cyan-600 hover:bg-cyan-500 active:bg-cyan-700 text-white text-xs font-medium rounded-lg transition-colors flex items-center justify-center gap-1.5 disabled:opacity-50"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 ${isScanningModal ? "animate-spin" : ""}`} />
+                    Quét 20 tin gần nhất
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleManualScan(50)}
+                    disabled={isScanningModal}
+                    className="py-1.5 px-3 bg-neutral-800 hover:bg-neutral-700 active:bg-neutral-600 text-neutral-300 text-xs font-medium rounded-lg transition-colors disabled:opacity-50"
+                  >
+                    Quét 50 tin
+                  </button>
+                </div>
+                {scanModalMsg && (
+                  <p className="text-[11px] text-cyan-400 font-medium animate-in fade-in pt-0.5">
+                    {scanModalMsg}
+                  </p>
+                )}
+              </div>
+            )}
+
             <div className="pt-2 flex gap-3">
               <button
                 type="button"
@@ -746,7 +812,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         {/* Footer App Version & Build */}
         <div className="pt-4 pb-1 text-center border-t border-neutral-800/80">
           <p className="text-[11px] text-neutral-500 font-medium">
-            InstaPhotos v1.5.2 • Build 17 (Safe Queue & Fast Scanner)
+            InstaPhotos v1.5.3 • Build 18 (In-App /scan & Refresh Trigger)
           </p>
         </div>
       </div>
