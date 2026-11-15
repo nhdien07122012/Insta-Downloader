@@ -5,8 +5,49 @@ import json
 import shutil
 import asyncio
 import subprocess
+import socket
+import urllib.request
 from pathlib import Path
 from typing import List, Dict, Any, Optional
+
+# ==============================================================================
+# HỆ THỐNG GIẢI MÃ DNS AN TOÀN (DNS over HTTPS - DoH)
+# Tự động vượt qua tình trạng nhà mạng Việt Nam (VNPT, Viettel, FPT) chặn tên miền Twitter/X
+# Đảm bảo box TX3 Mini luôn phân giải được IP chính xác của pbs.twimg.com và fxtwitter.com
+# ==============================================================================
+_orig_getaddrinfo = socket.getaddrinfo
+_dns_cache = {}
+
+def secure_doh_getaddrinfo(host, port, family=0, type=0, proto=0, flags=0):
+    if any(d in host for d in ("twimg.com", "twitter.com", "x.com", "fxtwitter.com", "fixupx.com")):
+        if host in _dns_cache:
+            ip = _dns_cache[host]
+            return [(socket.AF_INET, socket.SOCK_STREAM, 6, "", (ip, port))]
+
+        # Sử dụng Cloudflare DoH (1.1.1.1) và Google DoH (8.8.8.8) mã hóa cổng 443
+        doh_endpoints = [
+            f"https://1.1.1.1/dns-query?name={host}&type=A",
+            f"https://8.8.8.8/resolve?name={host}&type=A",
+        ]
+        for ep in doh_endpoints:
+            try:
+                req = urllib.request.Request(
+                    ep,
+                    headers={"Accept": "application/dns-json", "User-Agent": "Mozilla/5.0"}
+                )
+                with urllib.request.urlopen(req, timeout=3) as r:
+                    data = json.loads(r.read().decode())
+                    for ans in data.get("Answer", []):
+                        if ans.get("type") == 1:  # Record A (IPv4)
+                            ip = ans.get("data")
+                            _dns_cache[host] = ip
+                            return [(socket.AF_INET, socket.SOCK_STREAM, 6, "", (ip, port))]
+            except Exception:
+                continue
+
+    return _orig_getaddrinfo(host, port, family, type, proto, flags)
+
+socket.getaddrinfo = secure_doh_getaddrinfo
 
 from config import (
     BASE_DIR,
@@ -187,17 +228,17 @@ class InstagramDownloader:
         )
 
     def _download_twitter(self, url: str, tweet_id: str, target_dir: Path) -> Dict[str, Any]:
-        """Tải ảnh chất lượng gốc (Full Resolution orig) từ Twitter (X)."""
+        """Tải ảnh chất lượng gốc (Full Resolution orig) từ Twitter (X), hỗ trợ DoH và proxy tự động."""
         import requests
 
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
         }
 
-        # 1. Thử dùng fxtwitter/vxtwitter API (tải ảnh gốc orig 100%, không cần login)
+        # 1. Thử dùng fxtwitter API (tải metadata và ảnh gốc orig 100%, không cần login)
         api_endpoints = [
             f"https://api.fxtwitter.com/status/{tweet_id}",
-            f"https://api.vxtwitter.com/status/{tweet_id}",
+            f"https://api.fxtwitter.com/i/status/{tweet_id}",
         ]
 
         for api_url in api_endpoints:
@@ -252,15 +293,40 @@ class InstagramDownloader:
                                 m_url = re.sub(r"name=\w+", "name=orig", m_url)
 
                             file_path = target_dir / f"{idx}_photo.jpg"
-                            r_file = requests.get(m_url, headers=headers, timeout=30)
-                            if r_file.status_code == 200:
-                                with open(file_path, "wb") as f:
-                                    f.write(r_file.content)
-                                if file_path.exists() and file_path.stat().st_size > 100:
-                                    media_files.append({
-                                        "path": str(file_path),
-                                        "type": "photo",
-                                    })
+                            downloaded = False
+
+                            # Thử 1: Tải trực tiếp qua DoH (vượt tường lửa DNS nhà mạng)
+                            try:
+                                r_file = requests.get(m_url, headers=headers, timeout=20)
+                                if r_file.status_code == 200 and len(r_file.content) > 100:
+                                    with open(file_path, "wb") as f:
+                                        f.write(r_file.content)
+                                    downloaded = True
+                            except Exception as e_dl:
+                                print(f"[Direct download failed for photo {idx}]: {e_dl}")
+
+                            # Thử 2: Dự phòng qua proxy CDN d.fxtwitter.com / d.fixupx.com
+                            if not downloaded:
+                                proxy_candidates = [
+                                    f"https://d.fxtwitter.com/i/status/{tweet_id}/photo/{idx + 1}",
+                                    f"https://d.fixupx.com/i/status/{tweet_id}/photo/{idx + 1}",
+                                ]
+                                for p_url in proxy_candidates:
+                                    try:
+                                        r_proxy = requests.get(p_url, headers=headers, timeout=20)
+                                        if r_proxy.status_code == 200 and len(r_proxy.content) > 100:
+                                            with open(file_path, "wb") as f:
+                                                f.write(r_proxy.content)
+                                            downloaded = True
+                                            break
+                                    except Exception:
+                                        continue
+
+                            if downloaded and file_path.exists() and file_path.stat().st_size > 100:
+                                media_files.append({
+                                    "path": str(file_path),
+                                    "type": "photo",
+                                })
 
                         if media_files:
                             return {
@@ -277,7 +343,38 @@ class InstagramDownloader:
             except Exception as e_api:
                 print(f"[Warning] Twitter API {api_url} failed: {e_api}")
 
-        # 2. Phương pháp dự phòng: gallery-dl (chỉ tải ảnh)
+        # 2. Phương pháp dự phòng khẩn cấp: Tải trực tiếp qua CDN proxy d.fxtwitter.com
+        try:
+            media_files = []
+            for idx in range(1, 5):
+                file_path = target_dir / f"{idx - 1}_photo.jpg"
+                p_url = f"https://d.fxtwitter.com/i/status/{tweet_id}/photo/{idx}"
+                r_proxy = requests.get(p_url, headers=headers, timeout=15)
+                if r_proxy.status_code == 200 and len(r_proxy.content) > 1000:
+                    with open(file_path, "wb") as f:
+                        f.write(r_proxy.content)
+                    if file_path.exists() and file_path.stat().st_size > 100:
+                        media_files.append({
+                            "path": str(file_path),
+                            "type": "photo",
+                        })
+                else:
+                    break
+
+            if media_files:
+                return {
+                    "platform": "twitter",
+                    "shortcode": tweet_id,
+                    "url": url,
+                    "author": "X_User",
+                    "caption": "",
+                    "media_files": media_files,
+                    "target_dir": target_dir,
+                }
+        except Exception as e_proxy:
+            print(f"[Emergency Proxy Download Error]: {e_proxy}")
+
+        # 3. Phương pháp dự phòng cuối: gallery-dl (chỉ tải ảnh)
         try:
             res = self._download_with_gallery_dl(url, tweet_id, target_dir)
             res["platform"] = "twitter"

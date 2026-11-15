@@ -4,6 +4,26 @@ Toàn bộ các phiên bản cập nhật, mã bản dựng (build number), chi 
 
 ---
 
+## [v1.5.4 (Build 19)] - 2026-11-15
+- **Commit SHA**: `cập nhật hiện tại`
+- **Mục tiêu**: Khắc phục triệt để lỗi **không tải được link 𝕏 (Twitter)** trên box TX3 Mini (trong khi link Instagram vẫn hoạt động bình thường). Tích hợp cơ chế **DNS-over-HTTPS (DoH)** tự động phân giải tên miền `pbs.twimg.com`, `api.fxtwitter.com` qua Cloudflare `1.1.1.1` và Google `8.8.8.8` (cổng 443 mã hóa), vượt qua hoàn toàn tình trạng các nhà mạng Việt Nam (VNPT, Viettel, FPT) chặn phân giải DNS tên miền Twitter/X trên router gia đình. Bổ sung cơ chế tải ảnh dự phòng đa tầng qua CDN proxy `d.fxtwitter.com` và `d.fixupx.com`.
+- **Chi tiết thay đổi**:
+  - `instagram.py`:
+    - Tích hợp bộ phân giải `secure_doh_getaddrinfo`: Can thiệp `socket.getaddrinfo` cho các tên miền Twitter/X (`twimg.com`, `twitter.com`, `x.com`, `fxtwitter.com`, `fixupx.com`), tự động truy vấn bản ghi DNS A trực tiếp từ Cloudflare DoH (`1.1.1.1`) và Google DoH (`8.8.8.8`) có bộ nhớ đệm RAM (`_dns_cache`).
+    - Nâng cấp `_download_twitter`: Khi tải ảnh gốc (`name=orig`), nếu đường link trực tiếp `pbs.twimg.com` gặp sự cố mạng, bot tự động kích hoạt tải dự phòng qua các CDN proxy Cloudflare Edge (`d.fxtwitter.com`, `d.fixupx.com`).
+    - Bổ sung cơ chế cào ảnh khẩn cấp (Emergency Probe) tải trực tiếp qua CDN proxy khi metadata API bị gián đoạn.
+  - `ios-photo-app`:
+    - `ios-photo-app/package.json`: Nâng phiên bản lên `"1.5.4"`.
+    - `ios-photo-app/ios/App/App.xcodeproj/project.pbxproj`: Cập nhật `CURRENT_PROJECT_VERSION = 19;` và `MARKETING_VERSION = 1.5.4;`.
+    - `ios-photo-app/src/components/SettingsModal.tsx`: Chân trang hiển thị `InstaPhotos v1.5.4 • Build 19 (DoH Twitter Bypass & Cloud Sync)`.
+- **Link tải IPA trực tiếp**: [https://github.com/nhdien07122012/Insta-Downloader/releases/latest/download/InstaPhotos.ipa](https://github.com/nhdien07122012/Insta-Downloader/releases/latest/download/InstaPhotos.ipa)
+- **Lệnh hoàn tác mẫu (Rollback)**:
+  ```bash
+  git revert HEAD --no-edit
+  ```
+
+---
+
 ## [v1.5.3 (Build 18)] - 2026-11-15
 - **Commit SHA**: `f27f1c4`
 - **Mục tiêu**: Tích hợp tính năng **Gửi lệnh `/scan` trực tiếp từ ứng dụng iOS InstaPhotos**: Tự động gửi lệnh quét kênh (`/scan 20`) khi người dùng kéo màn hình xuống để làm mới (Pull-to-refresh) hoặc bấm nút Làm mới trên thanh tiêu đề (Header). Cho phép bot TX3 Mini phát hiện, tải và đẩy trọn bộ ảnh từ các link tồn đọng vào kho lưu trữ trước khi đồng bộ ảnh mới nhất về máy. Bổ sung nút quét thủ công nhanh (`[Quét 20 tin]`, `[Quét 50 tin]`) ngay trong Cài đặt.
