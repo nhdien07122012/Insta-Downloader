@@ -5,7 +5,7 @@ Toàn bộ các phiên bản cập nhật, mã bản dựng (build number), chi 
 ---
 
 ## [v1.5.2 (Build 17)] - 2026-11-15
-- **Commit SHA**: `cập nhật hiện tại`
+- **Commit SHA**: `c2ea824`
 - **Mục tiêu**: 
   1. Tích hợp **Đồng bộ Menu lệnh Telegram Bot (`set_my_commands`)** cho cả Chat riêng và Quản trị viên Kênh (hiển thị nút `[Menu]` trong chat và bảng gợi ý lệnh khi gõ `/` trong kênh).
   2. Nâng cấp lệnh `/scan` với cơ chế **Quét siêu tốc có tùy chỉnh phạm vi**: Mặc định quét **20 tin nhắn gần nhất** (chỉ mất 1-2s), hỗ trợ tham số linh hoạt `/scan <số_lượng>` (vd: `/scan 10`, `/scan 50`, `/scan 100`).
