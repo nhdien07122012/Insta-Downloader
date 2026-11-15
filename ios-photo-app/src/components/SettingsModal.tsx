@@ -746,7 +746,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         {/* Footer App Version & Build */}
         <div className="pt-4 pb-1 text-center border-t border-neutral-800/80">
           <p className="text-[11px] text-neutral-500 font-medium">
-            InstaPhotos v1.5.1 • Build 16 (Concurrent Processing & Auto Scanner)
+            InstaPhotos v1.5.2 • Build 17 (Safe Queue & Fast Scanner)
           </p>
         </div>
       </div>

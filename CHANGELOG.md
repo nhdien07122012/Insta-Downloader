@@ -4,6 +4,31 @@ Toàn bộ các phiên bản cập nhật, mã bản dựng (build number), chi 
 
 ---
 
+## [v1.5.2 (Build 17)] - 2026-11-15
+- **Commit SHA**: `cập nhật hiện tại`
+- **Mục tiêu**: 
+  1. Tích hợp **Đồng bộ Menu lệnh Telegram Bot (`set_my_commands`)** cho cả Chat riêng và Quản trị viên Kênh (hiển thị nút `[Menu]` trong chat và bảng gợi ý lệnh khi gõ `/` trong kênh).
+  2. Nâng cấp lệnh `/scan` với cơ chế **Quét siêu tốc có tùy chỉnh phạm vi**: Mặc định quét **20 tin nhắn gần nhất** (chỉ mất 1-2s), hỗ trợ tham số linh hoạt `/scan <số_lượng>` (vd: `/scan 10`, `/scan 50`, `/scan 100`).
+  3. Khắc phục triệt để hiện tượng **quá tải/im lặng khi gửi dồn dập nhiều link X và Instagram** thông qua **Async Semaphore (`PROCESS_SEMAPHORE = 1`)** khóa nhịp độ an toàn cho phần cứng TX3 Mini (S905W 1GB RAM) và các hàm gửi an toàn (`safe_send_photo`, `safe_send_video`, `safe_send_media_group`) tự động phục hồi khi gặp **Telegram Flood Control (HTTP 429 RetryAfter)**.
+- **Chi tiết thay đổi**:
+  - `bot.py`:
+    - Bổ sung `PROCESS_SEMAPHORE = asyncio.Semaphore(1)`: Đảm bảo TX3 Mini xử lý từng tác vụ một cách mượt mà theo hàng đợi, không bao giờ bị nghẽn RAM hay sập tiến trình khi nhận 10-20 link cùng lúc.
+    - Xây dựng 3 hàm upload an toàn (`safe_send_photo`, `safe_send_video`, `safe_send_media_group`): Bắt trọn lỗi Telegram `RetryAfter`, tự động ngủ đúng số giây yêu cầu rồi thử lại với con trỏ file (`seek(0)`) chuẩn xác.
+    - Bổ sung độ trễ nghỉ giãn cách `await asyncio.sleep(0.8)` giữa các bài viết hoàn thành để Telegram API và CPU hạ nhiệt.
+    - Tối ưu lệnh `/scan`: Mặc định 20 tin nhắn gần nhất, bóc tách tham số từ cả `context.args` và `msg.text`, tự động xóa thông báo sau 10 giây nếu chạy trong Kênh.
+    - Cập nhật `post_init_callback`: Tự động đồng bộ menu bot với Telegram (`set_my_commands`) cho cả người dùng cá nhân và admin kênh, tự động quét 20 tin gần nhất sau khi khởi động 5s.
+  - `ios-photo-app`:
+    - `ios-photo-app/package.json`: Nâng phiên bản lên `"1.5.2"`.
+    - `ios-photo-app/ios/App/App.xcodeproj/project.pbxproj`: Cập nhật `CURRENT_PROJECT_VERSION = 17;` và `MARKETING_VERSION = 1.5.2;`.
+    - `ios-photo-app/src/components/SettingsModal.tsx`: Chân trang hiển thị `InstaPhotos v1.5.2 • Build 17 (Safe Queue & Fast Scanner)`.
+- **Link tải IPA trực tiếp**: [https://github.com/nhdien07122012/Insta-Downloader/releases/latest/download/InstaPhotos.ipa](https://github.com/nhdien07122012/Insta-Downloader/releases/latest/download/InstaPhotos.ipa)
+- **Lệnh hoàn tác mẫu (Rollback)**:
+  ```bash
+  git revert HEAD --no-edit
+  ```
+
+---
+
 ## [v1.5.1 (Build 16)] - 2026-11-14
 - **Commit SHA**: `0a84df9` (và bản vá hoàn thiện)
 - **Mục tiêu**: Bổ sung tính năng **Xử lý đồng loạt liên kết song song (`concurrent_updates=3`)**, bóc tách **đa liên kết trong cùng 1 tin nhắn** (`extract_all_media_targets`), và phát triển tính năng **Quét & Tự động xử lý toàn bộ liên kết tồn đọng trong Kênh lưu trữ Telegram** (`/scan` command & startup background scanner). Hỗ trợ nhận lệnh `/scan` trực tiếp từ trong Kênh lưu trữ (thông qua `filters.ALL` & `UpdateType.CHANNEL_POSTS`), tự động dọn dẹp tin nhắn lệnh sau khi hoàn tất để kênh luôn gọn gàng. Đảm bảo TX3 Mini xử lý mượt mà khi người dùng gửi dồn dập nhiều link, đồng thời dọn sạch toàn bộ các link chưa tải đang chờ trên kênh.

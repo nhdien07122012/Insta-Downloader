@@ -13,7 +13,11 @@ from telegram import (
     InlineKeyboardMarkup,
     InputMediaPhoto,
     InputMediaVideo,
+    BotCommand,
+    BotCommandScopeDefault,
+    BotCommandScopeAllChatAdministrators,
 )
+from telegram.error import RetryAfter, TimedOut, NetworkError
 from telegram.request import HTTPXRequest
 from telegram.constants import ParseMode, ChatType
 from telegram.ext import (
@@ -212,6 +216,107 @@ async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(text, parse_mode=ParseMode.HTML)
 
 
+# Giới hạn xử lý an toàn: Mỗi thời điểm xử lý 1 tác vụ tải/đẩy ảnh để bảo vệ RAM chip S905W trên TX3 Mini
+# và triệt tiêu hoàn toàn lỗi Telegram Flood Control (HTTP 429) khi người dùng gửi dồn dập nhiều link.
+PROCESS_SEMAPHORE = asyncio.Semaphore(1)
+
+
+async def safe_send_photo(
+    bot, chat_id: Any, photo: Any, caption: str = None, parse_mode: Any = None, retries: int = 3
+):
+    """Gửi ảnh an toàn, tự động xử lý Telegram Flood Control (429) và timeout mạng."""
+    for attempt in range(retries):
+        try:
+            return await bot.send_photo(
+                chat_id=chat_id,
+                photo=photo,
+                caption=caption,
+                parse_mode=parse_mode,
+                write_timeout=180.0,
+                read_timeout=180.0,
+            )
+        except RetryAfter as e:
+            wait_time = int(e.retry_after) + 1
+            logger.warning(f"⚠️ Telegram Flood Control: Đợi {wait_time}s trước khi gửi lại ảnh...")
+            await asyncio.sleep(wait_time)
+            if hasattr(photo, "seek"):
+                photo.seek(0)
+        except (TimedOut, NetworkError) as e:
+            if attempt == retries - 1:
+                raise
+            logger.warning(f"⚠️ Mạng gián đoạn ({e}), thử lại lần {attempt + 2}/{retries}...")
+            await asyncio.sleep(2)
+            if hasattr(photo, "seek"):
+                photo.seek(0)
+
+
+async def safe_send_video(
+    bot,
+    chat_id: Any,
+    video: Any,
+    caption: str = None,
+    parse_mode: Any = None,
+    supports_streaming: bool = True,
+    duration: int = None,
+    width: int = None,
+    height: int = None,
+    retries: int = 3,
+):
+    """Gửi video an toàn, tự động xử lý Telegram Flood Control (429) và timeout mạng."""
+    for attempt in range(retries):
+        try:
+            return await bot.send_video(
+                chat_id=chat_id,
+                video=video,
+                caption=caption,
+                parse_mode=parse_mode,
+                supports_streaming=supports_streaming,
+                duration=duration,
+                width=width,
+                height=height,
+                write_timeout=300.0,
+                read_timeout=300.0,
+            )
+        except RetryAfter as e:
+            wait_time = int(e.retry_after) + 1
+            logger.warning(f"⚠️ Telegram Flood Control: Đợi {wait_time}s trước khi gửi lại video...")
+            await asyncio.sleep(wait_time)
+            if hasattr(video, "seek"):
+                video.seek(0)
+        except (TimedOut, NetworkError) as e:
+            if attempt == retries - 1:
+                raise
+            await asyncio.sleep(3)
+            if hasattr(video, "seek"):
+                video.seek(0)
+
+
+async def safe_send_media_group(bot, chat_id: Any, media: list, retries: int = 3):
+    """Gửi album ảnh/video an toàn, tự động xử lý Telegram Flood Control (429) và timeout mạng."""
+    for attempt in range(retries):
+        try:
+            return await bot.send_media_group(
+                chat_id=chat_id,
+                media=media,
+                write_timeout=300.0,
+                read_timeout=300.0,
+            )
+        except RetryAfter as e:
+            wait_time = int(e.retry_after) + 1
+            logger.warning(f"⚠️ Telegram Flood Control: Đợi {wait_time}s trước khi gửi lại album...")
+            await asyncio.sleep(wait_time)
+            for m in media:
+                if hasattr(m, "media") and hasattr(m.media, "seek"):
+                    m.media.seek(0)
+        except (TimedOut, NetworkError) as e:
+            if attempt == retries - 1:
+                raise
+            await asyncio.sleep(3)
+            for m in media:
+                if hasattr(m, "media") and hasattr(m.media, "seek"):
+                    m.media.seek(0)
+
+
 async def process_single_target(
     bot,
     target: Dict[str, Any],
@@ -221,204 +326,204 @@ async def process_single_target(
     user: Any = None,
     status_msg: Any = None,
 ) -> bool:
-    """Tải và đẩy 1 bài viết (Instagram hoặc Twitter/X) lên Kênh lưu trữ."""
-    target_url = target["url"]
-    shortcode = target["id"]
-    download_result = None
+    """Tải và đẩy 1 bài viết (Instagram hoặc Twitter/X) lên Kênh lưu trữ (khóa tuần tự Semaphore)."""
+    async with PROCESS_SEMAPHORE:
+        target_url = target["url"]
+        shortcode = target["id"]
+        download_result = None
 
-    try:
-        download_result = await downloader.download_post(target_url)
-        media_files = download_result["media_files"]
-        platform = download_result.get("platform", "instagram")
-        platform_name = "Twitter (X)" if platform == "twitter" else "Instagram"
-        platform_icon = "🐦" if platform == "twitter" else "📸"
+        try:
+            download_result = await downloader.download_post(target_url)
+            media_files = download_result["media_files"]
+            platform = download_result.get("platform", "instagram")
+            platform_name = "Twitter (X)" if platform == "twitter" else "Instagram"
+            platform_icon = "🐦" if platform == "twitter" else "📸"
 
-        # Xóa tin nhắn link gốc sau khi tải thành công
-        if original_msg_chat_id and original_msg_id:
-            try:
-                await bot.delete_message(chat_id=original_msg_chat_id, message_id=original_msg_id)
-                logger.info(f"🗑️ Đã xóa tin nhắn link gốc (chat_id={original_msg_chat_id}, ID: {original_msg_id})")
-            except Exception as e_del:
-                logger.debug(f"Không thể xóa tin nhắn link gốc: {e_del}")
+            # Xóa tin nhắn link gốc sau khi tải thành công
+            if original_msg_chat_id and original_msg_id:
+                try:
+                    await bot.delete_message(chat_id=original_msg_chat_id, message_id=original_msg_id)
+                    logger.info(f"🗑️ Đã xóa tin nhắn link gốc (chat_id={original_msg_chat_id}, ID: {original_msg_id})")
+                except Exception as e_del:
+                    logger.debug(f"Không thể xóa tin nhắn link gốc: {e_del}")
 
-        if status_msg:
-            try:
-                await status_msg.edit_text(
-                    f"⏳ Đã tải xong <b>{len(media_files)}</b> tệp từ {platform_name}. Đang đẩy lên Kênh lưu trữ...",
-                    parse_mode=ParseMode.HTML,
-                )
-            except Exception:
-                pass
-
-        # Chuẩn bị caption
-        author = download_result.get("author", "")
-        author_text = f"👤 Tác giả: @{author}\n" if author else ""
-        raw_caption = download_result.get("caption", "").strip()
-        if len(raw_caption) > 400:
-            raw_caption = raw_caption[:400] + "..."
-
-        caption_storage = (
-            f"{platform_icon} <b>{platform_name} Lưu Trữ</b>\n"
-            f"{author_text}"
-            f"🔗 <a href='{download_result['url']}'>Xem trên {platform_name}</a>\n"
-            f"📁 Số lượng: {len(media_files)} tệp\n\n"
-            f"<i>{html.escape(raw_caption)}</i>"
-        )
-
-        sent_messages = []
-        saved_media_records = []
-
-        # Upload lên Telegram
-        if len(media_files) == 1:
-            item = media_files[0]
-            with open(item["path"], "rb") as f:
-                if item["type"] == "photo":
-                    m_sent = await bot.send_photo(
-                        chat_id=destination_chat_id,
-                        photo=f,
-                        caption=caption_storage,
+            if status_msg:
+                try:
+                    await status_msg.edit_text(
+                        f"⏳ Đã tải xong <b>{len(media_files)}</b> tệp từ {platform_name}. Đang đẩy lên Kênh lưu trữ...",
                         parse_mode=ParseMode.HTML,
-                        write_timeout=120.0,
-                        read_timeout=120.0,
                     )
-                    file_id = m_sent.photo[-1].file_id
-                    file_unique_id = m_sent.photo[-1].file_unique_id
-                    file_size = m_sent.photo[-1].file_size
-                    width = m_sent.photo[-1].width
-                    height = m_sent.photo[-1].height
-                else:
-                    v_meta = get_video_meta(item["path"])
-                    m_sent = await bot.send_video(
-                        chat_id=destination_chat_id,
-                        video=f,
-                        caption=caption_storage,
-                        parse_mode=ParseMode.HTML,
-                        supports_streaming=True,
-                        duration=v_meta["duration"],
-                        width=v_meta["width"],
-                        height=v_meta["height"],
-                        write_timeout=300.0,
-                        read_timeout=300.0,
-                    )
-                    v_obj = m_sent.video or m_sent.animation or m_sent.document
-                    file_id = v_obj.file_id if v_obj else ""
-                    file_unique_id = v_obj.file_unique_id if v_obj else ""
-                    file_size = getattr(v_obj, "file_size", 0) or 0
-                    width = getattr(v_obj, "width", 0) or v_meta["width"] or 0
-                    height = getattr(v_obj, "height", 0) or v_meta["height"] or 0
+                except Exception:
+                    pass
 
-                sent_messages.append(m_sent)
-                saved_media_records.append({
-                    "file_id": file_id,
-                    "file_unique_id": file_unique_id,
-                    "media_type": item["type"],
-                    "file_size": file_size,
-                    "width": width,
-                    "height": height,
-                })
-        else:
-            chunk_size = 10
-            for i in range(0, len(media_files), chunk_size):
-                chunk = media_files[i:i + chunk_size]
-                media_group = []
-                file_handles = []
+            # Chuẩn bị caption
+            author = download_result.get("author", "")
+            author_text = f"👤 Tác giả: @{author}\n" if author else ""
+            raw_caption = download_result.get("caption", "").strip()
+            if len(raw_caption) > 400:
+                raw_caption = raw_caption[:400] + "..."
 
-                for idx, m in enumerate(chunk):
-                    fh = open(m["path"], "rb")
-                    file_handles.append(fh)
-                    cap = caption_storage if (i == 0 and idx == 0) else None
-                    pm = ParseMode.HTML if cap else None
+            caption_storage = (
+                f"{platform_icon} <b>{platform_name} Lưu Trữ</b>\n"
+                f"{author_text}"
+                f"🔗 <a href='{download_result['url']}'>Xem trên {platform_name}</a>\n"
+                f"📁 Số lượng: {len(media_files)} tệp\n\n"
+                f"<i>{html.escape(raw_caption)}</i>"
+            )
 
-                    if m["type"] == "photo":
-                        media_group.append(InputMediaPhoto(media=fh, caption=cap, parse_mode=pm))
+            sent_messages = []
+            saved_media_records = []
+
+            # Upload lên Telegram
+            if len(media_files) == 1:
+                item = media_files[0]
+                with open(item["path"], "rb") as f:
+                    if item["type"] == "photo":
+                        m_sent = await safe_send_photo(
+                            bot=bot,
+                            chat_id=destination_chat_id,
+                            photo=f,
+                            caption=caption_storage,
+                            parse_mode=ParseMode.HTML,
+                        )
+                        file_id = m_sent.photo[-1].file_id
+                        file_unique_id = m_sent.photo[-1].file_unique_id
+                        file_size = m_sent.photo[-1].file_size
+                        width = m_sent.photo[-1].width
+                        height = m_sent.photo[-1].height
                     else:
-                        v_meta = get_video_meta(m["path"])
-                        media_group.append(InputMediaVideo(
-                            media=fh,
-                            caption=cap,
-                            parse_mode=pm,
+                        v_meta = get_video_meta(item["path"])
+                        m_sent = await safe_send_video(
+                            bot=bot,
+                            chat_id=destination_chat_id,
+                            video=f,
+                            caption=caption_storage,
+                            parse_mode=ParseMode.HTML,
                             supports_streaming=True,
                             duration=v_meta["duration"],
                             width=v_meta["width"],
                             height=v_meta["height"],
-                        ))
+                        )
+                        v_obj = m_sent.video or m_sent.animation or m_sent.document
+                        file_id = v_obj.file_id if v_obj else ""
+                        file_unique_id = v_obj.file_unique_id if v_obj else ""
+                        file_size = getattr(v_obj, "file_size", 0) or 0
+                        width = getattr(v_obj, "width", 0) or v_meta["width"] or 0
+                        height = getattr(v_obj, "height", 0) or v_meta["height"] or 0
 
-                try:
-                    msgs = await bot.send_media_group(
-                        chat_id=destination_chat_id,
-                        media=media_group,
-                        write_timeout=300.0,
-                        read_timeout=300.0,
-                    )
-                    sent_messages.extend(msgs)
+                    sent_messages.append(m_sent)
+                    saved_media_records.append({
+                        "file_id": file_id,
+                        "file_unique_id": file_unique_id,
+                        "media_type": item["type"],
+                        "file_size": file_size,
+                        "width": width,
+                        "height": height,
+                    })
+            else:
+                chunk_size = 10
+                for i in range(0, len(media_files), chunk_size):
+                    chunk = media_files[i:i + chunk_size]
+                    media_group = []
+                    file_handles = []
 
-                    for m_s in msgs:
-                        if m_s.photo:
-                            saved_media_records.append({
-                                "file_id": m_s.photo[-1].file_id,
-                                "file_unique_id": m_s.photo[-1].file_unique_id,
-                                "media_type": "photo",
-                                "file_size": m_s.photo[-1].file_size,
-                                "width": m_s.photo[-1].width,
-                                "height": m_s.photo[-1].height,
-                            })
+                    for idx, m in enumerate(chunk):
+                        fh = open(m["path"], "rb")
+                        file_handles.append(fh)
+                        cap = caption_storage if (i == 0 and idx == 0) else None
+                        pm = ParseMode.HTML if cap else None
+
+                        if m["type"] == "photo":
+                            media_group.append(InputMediaPhoto(media=fh, caption=cap, parse_mode=pm))
                         else:
-                            v_obj = m_s.video or m_s.animation or m_s.document
-                            if v_obj:
+                            v_meta = get_video_meta(m["path"])
+                            media_group.append(InputMediaVideo(
+                                media=fh,
+                                caption=cap,
+                                parse_mode=pm,
+                                supports_streaming=True,
+                                duration=v_meta["duration"],
+                                width=v_meta["width"],
+                                height=v_meta["height"],
+                            ))
+
+                    try:
+                        msgs = await safe_send_media_group(
+                            bot=bot,
+                            chat_id=destination_chat_id,
+                            media=media_group,
+                        )
+                        sent_messages.extend(msgs)
+
+                        for m_s in msgs:
+                            if m_s.photo:
                                 saved_media_records.append({
-                                    "file_id": v_obj.file_id,
-                                    "file_unique_id": v_obj.file_unique_id,
-                                    "media_type": "video",
-                                    "file_size": getattr(v_obj, "file_size", 0) or 0,
-                                    "width": getattr(v_obj, "width", 0) or 0,
-                                    "height": getattr(v_obj, "height", 0) or 0,
+                                    "file_id": m_s.photo[-1].file_id,
+                                    "file_unique_id": m_s.photo[-1].file_unique_id,
+                                    "media_type": "photo",
+                                    "file_size": m_s.photo[-1].file_size,
+                                    "width": m_s.photo[-1].width,
+                                    "height": m_s.photo[-1].height,
                                 })
-                finally:
-                    for fh in file_handles:
-                        fh.close()
+                            else:
+                                v_obj = m_s.video or m_s.animation or m_s.document
+                                if v_obj:
+                                    saved_media_records.append({
+                                        "file_id": v_obj.file_id,
+                                        "file_unique_id": v_obj.file_unique_id,
+                                        "media_type": "video",
+                                        "file_size": getattr(v_obj, "file_size", 0) or 0,
+                                        "width": getattr(v_obj, "width", 0) or 0,
+                                        "height": getattr(v_obj, "height", 0) or 0,
+                                    })
+                    finally:
+                        for fh in file_handles:
+                            fh.close()
 
-        # Lưu vào Database
-        primary_message_id = sent_messages[0].message_id if sent_messages else None
-        user_id_val = user.id if user else None
-        post_id = await database.save_post(
-            shortcode=shortcode,
-            url=download_result["url"],
-            author=author,
-            caption=download_result.get("caption", ""),
-            channel_id=destination_chat_id,
-            channel_message_id=primary_message_id,
-            total_media=len(saved_media_records),
-            downloaded_by_user_id=user_id_val,
-        )
-        await database.save_media_items(post_id, saved_media_records)
-
-        # Phản hồi trong chat riêng nếu có
-        if status_msg:
-            channel_link = format_channel_post_link(destination_chat_id, primary_message_id)
-            keyboard = [
-                [InlineKeyboardButton(f"{platform_icon} Mở bài gốc {platform_name}", url=download_result["url"])]
-            ]
-            if channel_link:
-                keyboard[0].append(InlineKeyboardButton("☁️ Xem trên Kênh lưu trữ", url=channel_link))
-
-            reply_markup = InlineKeyboardMarkup(keyboard)
-            success_text = (
-                f"✅ <b>ĐÃ LƯU VÀO KHO TELEGRAM THÀNH CÔNG!</b>\n\n"
-                f"• Tác giả: <b>@{author or platform_name}</b>\n"
-                f"• Số lượng: <b>{len(saved_media_records)} tệp</b>\n"
-                f"• Mã bài: <code>{shortcode}</code>\n"
+            # Lưu vào Database
+            primary_message_id = sent_messages[0].message_id if sent_messages else None
+            user_id_val = user.id if user else None
+            post_id = await database.save_post(
+                shortcode=shortcode,
+                url=download_result["url"],
+                author=author,
+                caption=download_result.get("caption", ""),
+                channel_id=destination_chat_id,
+                channel_message_id=primary_message_id,
+                total_media=len(saved_media_records),
+                downloaded_by_user_id=user_id_val,
             )
-            await status_msg.edit_text(
-                success_text,
-                parse_mode=ParseMode.HTML,
-                reply_markup=reply_markup,
-            )
+            await database.save_media_items(post_id, saved_media_records)
 
-        return True
+            # Phản hồi trong chat riêng nếu có
+            if status_msg:
+                channel_link = format_channel_post_link(destination_chat_id, primary_message_id)
+                keyboard = [
+                    [InlineKeyboardButton(f"{platform_icon} Mở bài gốc {platform_name}", url=download_result["url"])]
+                ]
+                if channel_link:
+                    keyboard[0].append(InlineKeyboardButton("☁️ Xem trên Kênh lưu trữ", url=channel_link))
 
-    finally:
-        if download_result and "target_dir" in download_result:
-            clean_download_dir(download_result["target_dir"])
+                reply_markup = InlineKeyboardMarkup(keyboard)
+                success_text = (
+                    f"✅ <b>ĐÃ LƯU VÀO KHO TELEGRAM THÀNH CÔNG!</b>\n\n"
+                    f"• Tác giả: <b>@{author or platform_name}</b>\n"
+                    f"• Số lượng: <b>{len(saved_media_records)} tệp</b>\n"
+                    f"• Mã bài: <code>{shortcode}</code>\n"
+                )
+                await status_msg.edit_text(
+                    success_text,
+                    parse_mode=ParseMode.HTML,
+                    reply_markup=reply_markup,
+                )
+
+            return True
+
+        finally:
+            if download_result and "target_dir" in download_result:
+                clean_download_dir(download_result["target_dir"])
+            # Giãn cách 0.8 giây để Telegram API và CPU hạ nhiệt an toàn
+            await asyncio.sleep(0.8)
 
 
 async def handle_instagram_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -570,7 +675,7 @@ async def scan_and_process_channel_backlog(bot, limit: int = 60) -> int:
 
 
 async def scan_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Lệnh /scan: Quét và xử lý toàn bộ link tồn đọng trên Kênh lưu trữ (hỗ trợ cả chat riêng và trong kênh)."""
+    """Lệnh /scan: Quét và xử lý các link tồn đọng trên Kênh lưu trữ. Hỗ trợ tùy chỉnh số lượng, vd: /scan 20"""
     chat = update.effective_chat
     msg = update.effective_message
     user = update.effective_user
@@ -584,10 +689,19 @@ async def scan_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if TELEGRAM_STORAGE_CHANNEL_ID and chat.id != TELEGRAM_STORAGE_CHANNEL_ID:
             return
 
-    scan_limit = 100
+    # Mặc định quét siêu nhanh 20 tin gần nhất; người dùng có thể truyền tham số vd: /scan 10, /scan 50
+    scan_limit = 20
+    arg_val = None
     if context.args and len(context.args) > 0:
+        arg_val = context.args[0]
+    elif msg and msg.text:
+        parts = msg.text.strip().split()
+        if len(parts) > 1 and parts[1].isdigit():
+            arg_val = parts[1]
+
+    if arg_val:
         try:
-            scan_limit = min(300, max(10, int(context.args[0])))
+            scan_limit = min(300, max(5, int(arg_val)))
         except ValueError:
             pass
 
@@ -596,7 +710,7 @@ async def scan_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         try:
             status_msg = await context.bot.send_message(
                 chat_id=chat.id,
-                text=f"🔍 <b>Đang quét kênh lưu trữ (tối đa {scan_limit} tin gần nhất)...</b>",
+                text=f"🔍 <b>Đang quét {scan_limit} tin nhắn gần nhất trong kênh...</b>",
                 parse_mode=ParseMode.HTML,
             )
         except Exception as e:
@@ -608,12 +722,12 @@ async def scan_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         try:
             if count > 0:
                 await status_msg.edit_text(
-                    f"🎉 <b>Quét hoàn tất!</b>\nĐã phát hiện và tải thành công <b>{count}</b> bài viết tồn đọng vào kho.",
+                    f"🎉 <b>Quét hoàn tất ({scan_limit} tin gần nhất)!</b>\nĐã phát hiện và tải thành công <b>{count}</b> bài viết tồn đọng vào kho.",
                     parse_mode=ParseMode.HTML,
                 )
             else:
                 await status_msg.edit_text(
-                    "✅ <b>Kênh lưu trữ sạch sẽ!</b> Không có link tồn đọng nào cần xử lý.",
+                    f"✅ <b>Kênh lưu trữ sạch sẽ!</b> Không có link tồn đọng nào trong {scan_limit} tin gần nhất.",
                     parse_mode=ParseMode.HTML,
                 )
 
@@ -634,12 +748,28 @@ async def scan_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def post_init_callback(application: Application):
-    """Chạy ngầm sau khi bot khởi động để tự động quét link tồn đọng."""
+    """Chạy sau khi bot khởi động: Đồng bộ menu lệnh bot lên Telegram và quét dọn kênh ngầm."""
+    # 1. Đăng ký menu lệnh với Telegram (Hiển thị nút Menu trong chat và gợi ý khi gõ / trong kênh)
+    bot_commands = [
+        BotCommand("scan", "Quét & tải link tồn đọng (mặc định 20 tin, vd: /scan 50)"),
+        BotCommand("stats", "Xem thống kê kho ảnh lưu trữ"),
+        BotCommand("recent", "Xem danh sách bài đăng đã lưu gần nhất"),
+        BotCommand("status", "Kiểm tra trạng thái bot và dung lượng ổ cứng"),
+        BotCommand("help", "Xem hướng dẫn sử dụng bot"),
+    ]
+    try:
+        await application.bot.set_my_commands(bot_commands)
+        await application.bot.set_my_commands(bot_commands, scope=BotCommandScopeAllChatAdministrators())
+        logger.info("✅ Đã đồng bộ menu lệnh bot lên Telegram thành công!")
+    except Exception as e:
+        logger.warning(f"Lỗi khi đồng bộ menu lệnh bot: {e}")
+
+    # 2. Tự động quét 20 tin nhắn gần nhất lúc khởi động để dọn sạch link tồn đọng
     async def _auto_scan():
         await asyncio.sleep(5)  # Đợi bot ổn định kết nối
         logger.info("🚀 Tự động kích hoạt quét link tồn đọng trên kênh lưu trữ khi khởi động...")
         try:
-            count = await scan_and_process_channel_backlog(application.bot, limit=100)
+            count = await scan_and_process_channel_backlog(application.bot, limit=20)
             if count > 0:
                 logger.info(f"🎉 Tự động dọn dẹp và xử lý thành công {count} bài viết tồn đọng trên kênh!")
         except Exception as e:
