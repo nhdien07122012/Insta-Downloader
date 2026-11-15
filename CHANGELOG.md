@@ -4,6 +4,26 @@ Toàn bộ các phiên bản cập nhật, mã bản dựng (build number), chi 
 
 ---
 
+## [v1.5.6 (Build 21)] - 2026-11-15
+- **Commit SHA**: (Sẽ cập nhật sau khi push)
+- **Mục tiêu**: Tối ưu hóa trải nghiệm làm mới (Pull-to-refresh) trên app iOS: **Loại bỏ việc tự động gửi lệnh `/scan` khi kéo màn hình xuống để tải ảnh Telegram**, giúp thao tác kéo tải ảnh diễn ra ngay tức thì, mượt mà và không làm phiền kênh lưu trữ. Giữ nguyên chức năng nút bấm quét `/scan` thủ công (`[Quét 20 tin]`, `[Quét 50 tin]`) trong Cài đặt (Settings).
+- **Chi tiết thay đổi**:
+  - `ios-photo-app/src/App.tsx`:
+    - Thay thế hàm `handleRefreshAndScan` bằng `handleRefresh` thuần túy: Chỉ gọi `loadPhotos(false)` để nạp trực tiếp danh sách ảnh mới nhất từ Telegram về thiết bị, không gọi `triggerChannelScan`.
+    - Gỡ bỏ `isScanning` và `scanToast` trên giao diện trang chính (không còn hiển thị popup "Đang gửi /scan..." hay chờ 2.5s khi kéo làm mới).
+    - Cập nhật text kéo làm mới: *"Kéo xuống để làm mới ảnh"*.
+  - `ios-photo-app/src/components/SettingsModal.tsx`:
+    - Giữ nguyên 100% chức năng quét link tồn đọng `/scan` thủ công (`handleManualScan`) khi người dùng chủ động bấm trong phần Cài đặt.
+    - Cập nhật footer: `InstaPhotos v1.5.6 • Build 21 (Dedicated Pull-to-Refresh & Manual Scan)`.
+  - `ios-photo-app/package.json` & `project.pbxproj`: Nâng phiên bản lên `v1.5.6 (Build 21)`.
+- **Link tải IPA trực tiếp**: [https://github.com/nhdien07122012/Insta-Downloader/releases/latest/download/InstaPhotos.ipa](https://github.com/nhdien07122012/Insta-Downloader/releases/latest/download/InstaPhotos.ipa)
+- **Lệnh hoàn tác mẫu (Rollback)**:
+  ```bash
+  git revert HEAD --no-edit
+  ```
+
+---
+
 ## [v1.5.5 (Build 20)] - 2026-11-15
 - **Commit SHA**: (Sẽ cập nhật sau khi push)
 - **Mục tiêu**: 
