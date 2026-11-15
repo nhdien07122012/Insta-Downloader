@@ -5,7 +5,7 @@ Toàn bộ các phiên bản cập nhật, mã bản dựng (build number), chi 
 ---
 
 ## [v1.5.3 (Build 18)] - 2026-11-15
-- **Commit SHA**: `cập nhật hiện tại`
+- **Commit SHA**: `f27f1c4`
 - **Mục tiêu**: Tích hợp tính năng **Gửi lệnh `/scan` trực tiếp từ ứng dụng iOS InstaPhotos**: Tự động gửi lệnh quét kênh (`/scan 20`) khi người dùng kéo màn hình xuống để làm mới (Pull-to-refresh) hoặc bấm nút Làm mới trên thanh tiêu đề (Header). Cho phép bot TX3 Mini phát hiện, tải và đẩy trọn bộ ảnh từ các link tồn đọng vào kho lưu trữ trước khi đồng bộ ảnh mới nhất về máy. Bổ sung nút quét thủ công nhanh (`[Quét 20 tin]`, `[Quét 50 tin]`) ngay trong Cài đặt.
 - **Chi tiết thay đổi**:
   - `ios-photo-app/src/services/telegramClient.ts`:
