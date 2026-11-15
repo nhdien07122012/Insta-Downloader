@@ -5,7 +5,7 @@ Toàn bộ các phiên bản cập nhật, mã bản dựng (build number), chi 
 ---
 
 ## [v1.5.4 (Build 19)] - 2026-11-15
-- **Commit SHA**: `cập nhật hiện tại`
+- **Commit SHA**: `d4b3e5f`
 - **Mục tiêu**: Khắc phục triệt để lỗi **không tải được link 𝕏 (Twitter)** trên box TX3 Mini (trong khi link Instagram vẫn hoạt động bình thường). Tích hợp cơ chế **DNS-over-HTTPS (DoH)** tự động phân giải tên miền `pbs.twimg.com`, `api.fxtwitter.com` qua Cloudflare `1.1.1.1` và Google `8.8.8.8` (cổng 443 mã hóa), vượt qua hoàn toàn tình trạng các nhà mạng Việt Nam (VNPT, Viettel, FPT) chặn phân giải DNS tên miền Twitter/X trên router gia đình. Bổ sung cơ chế tải ảnh dự phòng đa tầng qua CDN proxy `d.fxtwitter.com` và `d.fixupx.com`.
 - **Chi tiết thay đổi**:
   - `instagram.py`:
