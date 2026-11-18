@@ -4,6 +4,32 @@ Toàn bộ các phiên bản cập nhật, mã bản dựng (build number), chi 
 
 ---
 
+## [v1.6.0 (Build 22)] - 2026-11-19
+- **Commit SHA**: (Sẽ cập nhật sau khi push)
+- **Mục tiêu**: 
+  1. **Tích hợp tính năng giữ chọn ảnh để xóa hàng loạt (Batch Photo Deletion)**: Cho phép người dùng nhấn giữ (long-press 400ms) lên bất kỳ ảnh nào trên lưới hoặc bấm nút "Chọn" trên thanh Header để kích hoạt chế độ chọn nhiều ảnh chuẩn Apple Photos. Hiển thị huy hiệu tick chọn bo tròn, thanh tác vụ nổi Liquid Glass phía dưới (Chia sẻ, Đếm số lượng, Thùng rác xóa hàng loạt) cùng hộp thoại xác nhận ActionSheet an toàn. Hỗ trợ xóa đồng thời trên cả Kênh Telegram (MTProto & Bot API) và bộ nhớ đệm thiết bị (IndexedDB).
+  2. **Nâng cấp hiệu ứng vuốt chuyển ảnh toàn màn hình siêu mượt (Apple Photos 3-Slide Carousel)**: Tái cấu trúc cơ chế vuốt ảnh trong `PhotoViewer.tsx` sang hệ thống 3-Slide Viewport liên tục với độ bám ngón tay 1:1, hiển thị ảnh trước và ảnh sau trượt vào từ mép màn hình cùng đường cong giảm tốc quán tính chuẩn iOS (`cubic-bezier(0.16, 1, 0.3, 1)`), loại bỏ hoàn toàn cảm giác giật cục hay đứt đoạn.
+- **Chi tiết thay đổi**:
+  - `ios-photo-app/src/components/PhotoGrid.tsx`:
+    - Tích hợp bộ đếm thời gian chạm (`longPressTimerRef` 420ms) kèm rung phản hồi xúc giác (`navigator.vibrate`) khi kích hoạt chế độ chọn.
+    - Hiển thị badge tick tròn xanh dương chuẩn Apple Photos khi ảnh được chọn và viền xanh nổi bật (`ring-2 ring-blue-500 scale-95`).
+  - `ios-photo-app/src/components/Header.tsx`:
+    - Bổ sung nút bấm "Chọn" trên Header; khi ở chế độ chọn hiển thị nút "Hủy", tiêu đề "Đã chọn X mục", và nút "Chọn tất cả / Bỏ chọn".
+  - `ios-photo-app/src/components/PhotoViewer.tsx`:
+    - Thay thế cơ chế dịch chuyển đơn lẻ bằng hệ thống 3-Slide Viewport (`prevPhoto`, `currentPhoto`, `nextPhoto`) với khoảng cách đệm `GAP = 24px`.
+    - Khi vuốt ngang, ảnh kế tiếp và ảnh trước trượt vào theo thời gian thực dưới ngón tay; khi thả tay, hệ thống tính toán vận tốc và khoảng cách để trượt mượt mà sang ảnh mới bằng spring easing `0.32s cubic-bezier(0.16, 1, 0.3, 1)` mà không bị nhấp nháy màn hình.
+  - `ios-photo-app/src/services/telegramClient.ts`: Bổ sung `deleteTelegramPhotos` hỗ trợ xóa mảng `messageIds` trong 1 lượt gọi MTProto.
+  - `ios-photo-app/src/services/photoStorage.ts`: Bổ sung `removePhotosFromCache` hỗ trợ xóa mảng ảnh khỏi IndexedDB và giải phóng ObjectURL.
+  - `ios-photo-app/src/App.tsx`: Quản lý toàn bộ state chọn nhiều ảnh, thanh tác vụ nổi phía dưới và modal xác nhận xóa hàng loạt.
+  - `ios-photo-app/package.json` & `project.pbxproj`: Nâng phiên bản lên `v1.6.0 (Build 22)`.
+- **Link tải IPA trực tiếp**: [https://github.com/nhdien07122012/Insta-Downloader/releases/latest/download/InstaPhotos.ipa](https://github.com/nhdien07122012/Insta-Downloader/releases/latest/download/InstaPhotos.ipa)
+- **Lệnh hoàn tác mẫu (Rollback)**:
+  ```bash
+  git revert HEAD --no-edit
+  ```
+
+---
+
 ## [v1.5.6 (Build 21)] - 2026-11-15
 - **Commit SHA**: (Sẽ cập nhật sau khi push)
 - **Mục tiêu**: Tối ưu hóa trải nghiệm làm mới (Pull-to-refresh) trên app iOS: **Loại bỏ việc tự động gửi lệnh `/scan` khi kéo màn hình xuống để tải ảnh Telegram**, giúp thao tác kéo tải ảnh diễn ra ngay tức thì, mượt mà và không làm phiền kênh lưu trữ. Giữ nguyên chức năng nút bấm quét `/scan` thủ công (`[Quét 20 tin]`, `[Quét 50 tin]`) trong Cài đặt (Settings).

@@ -12,6 +12,7 @@ import {
   RefreshCw,
   Sparkles,
   Trash2,
+  Play,
 } from "lucide-react";
 import { Share } from "@capacitor/share";
 import { fetchFullResolutionPhoto } from "../services/telegramClient";
@@ -50,10 +51,13 @@ export const PhotoViewer: React.FC<PhotoViewerProps> = ({
   const [position, setPosition] = useState({ x: 0, y: 0 });
   const [isGesturing, setIsGesturing] = useState(false);
 
-  // Swipe left/right state
-  const [swipeOffset, setSwipeOffset] = useState(0);
+  // Apple Photos Carousel Track State
+  const [slideOffset, setSlideOffset] = useState(0);
+  const [isDragging, setIsDragging] = useState(false);
+  const [isAnimating, setIsAnimating] = useState(false);
   const swipeStartRef = useRef<{ x: number; y: number; time: number }>({ x: 0, y: 0, time: 0 });
   const isSwipeGestureRef = useRef<boolean>(false);
+  const animationTimerRef = useRef<any>(null);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const touchStartRef = useRef<{ dist: number; scale: number; x: number; y: number; touches: number }>({
@@ -64,6 +68,8 @@ export const PhotoViewer: React.FC<PhotoViewerProps> = ({
     touches: 0,
   });
   const lastTapRef = useRef<number>(0);
+
+  const GAP = 24;
 
   const showToast = (msg: string) => {
     setToast(msg);
@@ -76,7 +82,9 @@ export const PhotoViewer: React.FC<PhotoViewerProps> = ({
   useEffect(() => {
     setScale(1);
     setPosition({ x: 0, y: 0 });
-    setSwipeOffset(0);
+    setSlideOffset(0);
+    setIsDragging(false);
+    setIsAnimating(false);
     isSwipeGestureRef.current = false;
     let active = true;
     setHdUrl(null);
@@ -92,6 +100,9 @@ export const PhotoViewer: React.FC<PhotoViewerProps> = ({
 
     return () => {
       active = false;
+      if (animationTimerRef.current) {
+        clearTimeout(animationTimerRef.current);
+      }
     };
   }, [photo?.id, photo?.messageId]);
 
@@ -100,15 +111,35 @@ export const PhotoViewer: React.FC<PhotoViewerProps> = ({
   const currentIndex = allPhotos.findIndex((p) => p.id === photo.id);
   const hasPrev = currentIndex > 0;
   const hasNext = currentIndex < allPhotos.length - 1;
+  const prevPhoto = hasPrev ? allPhotos[currentIndex - 1] : null;
+  const nextPhoto = hasNext ? allPhotos[currentIndex + 1] : null;
 
   const handlePrev = (e?: React.MouseEvent) => {
     e?.stopPropagation();
-    if (hasPrev) onSelectPhoto(allPhotos[currentIndex - 1]);
+    if (!hasPrev || isAnimating) return;
+    const width = containerRef.current?.clientWidth || window.innerWidth;
+    setIsAnimating(true);
+    setIsDragging(false);
+    setSlideOffset(width + GAP);
+    animationTimerRef.current = setTimeout(() => {
+      onSelectPhoto(allPhotos[currentIndex - 1]);
+      setSlideOffset(0);
+      setIsAnimating(false);
+    }, 310);
   };
 
   const handleNext = (e?: React.MouseEvent) => {
     e?.stopPropagation();
-    if (hasNext) onSelectPhoto(allPhotos[currentIndex + 1]);
+    if (!hasNext || isAnimating) return;
+    const width = containerRef.current?.clientWidth || window.innerWidth;
+    setIsAnimating(true);
+    setIsDragging(false);
+    setSlideOffset(-(width + GAP));
+    animationTimerRef.current = setTimeout(() => {
+      onSelectPhoto(allPhotos[currentIndex + 1]);
+      setSlideOffset(0);
+      setIsAnimating(false);
+    }, 310);
   };
 
   // Keyboard navigation
@@ -120,10 +151,12 @@ export const PhotoViewer: React.FC<PhotoViewerProps> = ({
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [currentIndex, hasPrev, hasNext]);
+  }, [currentIndex, hasPrev, hasNext, isAnimating]);
 
-  // Touch Handlers for Pinch to Zoom, Pan & Swipe Left/Right
+  // Touch Handlers for Pinch to Zoom, Pan & Smooth Apple Photos Carousel Swipe
   const handleTouchStart = (e: React.TouchEvent) => {
+    if (isAnimating) return;
+
     if (e.touches.length === 2) {
       // 2 fingers: Pinch to zoom
       setIsGesturing(true);
@@ -147,11 +180,11 @@ export const PhotoViewer: React.FC<PhotoViewerProps> = ({
         if (scale > 1.1) {
           setScale(1);
           setPosition({ x: 0, y: 0 });
-          setSwipeOffset(0);
+          setSlideOffset(0);
         } else {
           setScale(2.5);
           setPosition({ x: 0, y: 0 });
-          setSwipeOffset(0);
+          setSlideOffset(0);
         }
         lastTapRef.current = 0;
         return;
@@ -169,18 +202,21 @@ export const PhotoViewer: React.FC<PhotoViewerProps> = ({
           touches: 1,
         };
       } else {
-        // Normal 1x: Prepare for horizontal swipe between photos
+        // Normal 1x: Prepare for horizontal carousel swipe
         swipeStartRef.current = {
           x: touch.clientX,
           y: touch.clientY,
           time: now,
         };
         isSwipeGestureRef.current = false;
+        setIsDragging(false);
       }
     }
   };
 
   const handleTouchMove = (e: React.TouchEvent) => {
+    if (isAnimating) return;
+
     if (e.touches.length === 2 && touchStartRef.current.touches === 2) {
       e.preventDefault();
       const dist = Math.hypot(
@@ -208,9 +244,9 @@ export const PhotoViewer: React.FC<PhotoViewerProps> = ({
 
       // Determine if gesture is horizontal swipe
       if (!isSwipeGestureRef.current) {
-        if (Math.abs(deltaX) > 8 && Math.abs(deltaX) > Math.abs(deltaY) * 1.1) {
+        if (Math.abs(deltaX) > 7 && Math.abs(deltaX) > Math.abs(deltaY) * 1.05) {
           isSwipeGestureRef.current = true;
-          setIsGesturing(true);
+          setIsDragging(true);
         }
       }
 
@@ -219,16 +255,17 @@ export const PhotoViewer: React.FC<PhotoViewerProps> = ({
         // Rubber-band resistance at start and end
         let effectiveOffset = deltaX;
         if (!hasPrev && deltaX > 0) {
-          effectiveOffset = deltaX * 0.3;
+          effectiveOffset = deltaX * 0.28;
         } else if (!hasNext && deltaX < 0) {
-          effectiveOffset = deltaX * 0.3;
+          effectiveOffset = deltaX * 0.28;
         }
-        setSwipeOffset(effectiveOffset);
+        setSlideOffset(effectiveOffset);
       }
     }
   };
 
   const handleTouchEnd = () => {
+    if (isAnimating) return;
     setIsGesturing(false);
 
     if (scale < 1.05) {
@@ -238,25 +275,42 @@ export const PhotoViewer: React.FC<PhotoViewerProps> = ({
 
     if (isSwipeGestureRef.current) {
       isSwipeGestureRef.current = false;
-      const duration = Date.now() - swipeStartRef.current.time;
-      const velocity = Math.abs(swipeOffset) / Math.max(duration, 1);
+      setIsDragging(false);
 
-      const isQuickFlick = Math.abs(swipeOffset) > 20 && velocity > 0.35;
-      const isDragPassed = Math.abs(swipeOffset) > 50;
+      const duration = Math.max(Date.now() - swipeStartRef.current.time, 1);
+      const velocity = Math.abs(slideOffset) / duration;
+      const width = containerRef.current?.clientWidth || window.innerWidth;
+      const stride = width + GAP;
 
-      if (swipeOffset < 0 && (isDragPassed || isQuickFlick)) {
-        // Vuốt sang trái -> Xem ảnh tiếp theo
-        if (hasNext) {
-          handleNext();
-        }
-      } else if (swipeOffset > 0 && (isDragPassed || isQuickFlick)) {
-        // Vuốt sang phải -> Xem ảnh trước đó
-        if (hasPrev) {
-          handlePrev();
-        }
+      const isQuickFlick = Math.abs(slideOffset) > 25 && velocity > 0.32;
+      const isDragPassed = Math.abs(slideOffset) > width * 0.22;
+
+      if (slideOffset < 0 && (isDragPassed || isQuickFlick) && hasNext) {
+        // Vuốt sang trái -> Trượt sang ảnh tiếp theo với hiệu ứng vật lý Apple Photos
+        setIsAnimating(true);
+        setSlideOffset(-stride);
+        animationTimerRef.current = setTimeout(() => {
+          onSelectPhoto(allPhotos[currentIndex + 1]);
+          setSlideOffset(0);
+          setIsAnimating(false);
+        }, 310);
+      } else if (slideOffset > 0 && (isDragPassed || isQuickFlick) && hasPrev) {
+        // Vuốt sang phải -> Trượt sang ảnh trước đó với hiệu ứng vật lý Apple Photos
+        setIsAnimating(true);
+        setSlideOffset(stride);
+        animationTimerRef.current = setTimeout(() => {
+          onSelectPhoto(allPhotos[currentIndex - 1]);
+          setSlideOffset(0);
+          setIsAnimating(false);
+        }, 310);
+      } else {
+        // Không đủ ngưỡng vuốt -> Bật lò xo mượt mà quay về vị trí ban đầu
+        setIsAnimating(true);
+        setSlideOffset(0);
+        animationTimerRef.current = setTimeout(() => {
+          setIsAnimating(false);
+        }, 310);
       }
-
-      setSwipeOffset(0);
     }
   };
 
@@ -414,37 +468,113 @@ export const PhotoViewer: React.FC<PhotoViewerProps> = ({
         onTouchEnd={handleTouchEnd}
         className="relative flex-1 flex items-center justify-center overflow-hidden cursor-pointer touch-none"
       >
-        {photo.mediaType === "video" ? (
+        {/* Continuous 3-Slide Carousel Track (Chuẩn Apple Photos) */}
+        <div
+          className="relative w-full h-full flex items-center justify-center will-change-transform"
+          style={{
+            transform: `translate3d(${slideOffset}px, 0, 0)`,
+            transition: isDragging
+              ? "none"
+              : isAnimating
+              ? "transform 0.32s cubic-bezier(0.16, 1, 0.3, 1)"
+              : "none",
+          }}
+        >
+          {/* SLIDE TRƯỚC (Previous Photo - trượt vào từ bên trái) */}
+          {prevPhoto && (
+            <div
+              style={{
+                transform: `translate3d(calc(-100% - ${GAP}px), 0, 0)`,
+              }}
+              className="absolute inset-0 flex items-center justify-center pointer-events-none p-2 select-none"
+            >
+              {prevPhoto.mediaType === "video" ? (
+                <div className="relative max-w-full max-h-[80vh] flex items-center justify-center">
+                  <img
+                    src={prevPhoto.thumbnailUrl || prevPhoto.url}
+                    alt=""
+                    className="max-w-full max-h-[80vh] rounded-2xl object-contain shadow-2xl"
+                  />
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <div className="w-12 h-12 rounded-full bg-black/60 backdrop-blur-md flex items-center justify-center text-white shadow-xl">
+                      <Play className="w-6 h-6 fill-white text-white ml-0.5" />
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <img
+                  src={prevPhoto.thumbnailUrl || prevPhoto.url}
+                  alt=""
+                  className="max-w-full max-h-full object-contain"
+                  loading="eager"
+                />
+              )}
+            </div>
+          )}
+
+          {/* SLIDE HIỆN TẠI (Current Photo - ở trung tâm) */}
           <div
-            className="w-full h-full flex items-center justify-center p-2"
+            className="w-full h-full flex items-center justify-center p-2 select-none"
             style={{
-              transform: `translate(${swipeOffset}px, 0px)`,
+              transform:
+                scale > 1
+                  ? `scale(${scale}) translate(${position.x / scale}px, ${position.y / scale}px)`
+                  : undefined,
               transition: isGesturing ? "none" : "transform 0.25s cubic-bezier(0.2, 0, 0, 1)",
             }}
           >
-            <video
-              key={hdUrl || photo.url}
-              src={hdUrl || photo.url}
-              poster={photo.thumbnailUrl}
-              controls
-              playsInline
-              autoPlay
-              preload="metadata"
-              className="max-w-full max-h-[80vh] rounded-2xl object-contain shadow-2xl pointer-events-auto"
-            />
+            {photo.mediaType === "video" ? (
+              <video
+                key={hdUrl || photo.url}
+                src={hdUrl || photo.url}
+                poster={photo.thumbnailUrl}
+                controls
+                playsInline
+                autoPlay
+                preload="metadata"
+                className="max-w-full max-h-[80vh] rounded-2xl object-contain shadow-2xl pointer-events-auto"
+              />
+            ) : (
+              <img
+                src={hdUrl || photo.url}
+                alt={photo.caption || "Fullscreen view"}
+                className="max-w-full max-h-full object-contain pointer-events-auto select-none"
+              />
+            )}
           </div>
-        ) : (
-          <img
-            src={hdUrl || photo.url}
-            alt={photo.caption || "Fullscreen view"}
-            style={{
-              transform: `scale(${scale}) translate(${(position.x + swipeOffset) / scale}px, ${position.y / scale}px)`,
-              transition: isGesturing ? "none" : "transform 0.25s cubic-bezier(0.2, 0, 0, 1)",
-              WebkitTouchCallout: "default",
-            }}
-            className="max-w-full max-h-full object-contain pointer-events-auto select-none"
-          />
-        )}
+
+          {/* SLIDE TIẾP THEO (Next Photo - trượt vào từ bên phải) */}
+          {nextPhoto && (
+            <div
+              style={{
+                transform: `translate3d(calc(100% + ${GAP}px), 0, 0)`,
+              }}
+              className="absolute inset-0 flex items-center justify-center pointer-events-none p-2 select-none"
+            >
+              {nextPhoto.mediaType === "video" ? (
+                <div className="relative max-w-full max-h-[80vh] flex items-center justify-center">
+                  <img
+                    src={nextPhoto.thumbnailUrl || nextPhoto.url}
+                    alt=""
+                    className="max-w-full max-h-[80vh] rounded-2xl object-contain shadow-2xl"
+                  />
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <div className="w-12 h-12 rounded-full bg-black/60 backdrop-blur-md flex items-center justify-center text-white shadow-xl">
+                      <Play className="w-6 h-6 fill-white text-white ml-0.5" />
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <img
+                  src={nextPhoto.thumbnailUrl || nextPhoto.url}
+                  alt=""
+                  className="max-w-full max-h-full object-contain"
+                  loading="eager"
+                />
+              )}
+            </div>
+          )}
+        </div>
 
         {loadingHd && (
           <div className="absolute top-24 right-4 bg-black/60 border border-neutral-700/60 backdrop-blur-md px-3 py-1.5 rounded-full flex items-center gap-2 text-xs text-neutral-300 pointer-events-none">

@@ -5,10 +5,12 @@ import {
   saveStoredConfig,
   fetchChannelPhotos,
   deleteTelegramPhoto,
+  deleteTelegramPhotos,
 } from "./services/telegramClient";
 import {
   getCachedPhotosFromDB,
   removePhotoFromCache,
+  removePhotosFromCache,
 } from "./services/photoStorage";
 import { Header } from "./components/Header";
 import { PhotoGrid } from "./components/PhotoGrid";
@@ -18,6 +20,7 @@ import { SettingsModal } from "./components/SettingsModal";
 import { AddPhotoModal } from "./components/AddPhotoModal";
 import { App as CapApp } from "@capacitor/app";
 import { Clipboard } from "@capacitor/clipboard";
+import { Share } from "@capacitor/share";
 import {
   RefreshCw,
   Search,
@@ -33,6 +36,8 @@ import {
   User,
   Calendar,
   Video,
+  Share2,
+  Trash2,
 } from "lucide-react";
 
 export const App: React.FC = () => {
@@ -49,6 +54,108 @@ export const App: React.FC = () => {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [addUrl, setAddUrl] = useState("");
   const [clipboardPrompt, setClipboardPrompt] = useState<string | null>(null);
+
+  // Multi-Photo Selection & Batch Deletion State (Chuẩn Apple Photos)
+  const [isSelectionMode, setIsSelectionMode] = useState(false);
+  const [selectedPhotoIds, setSelectedPhotoIds] = useState<Set<string | number>>(new Set());
+  const [isBatchDeleteModalOpen, setIsBatchDeleteModalOpen] = useState(false);
+  const [isBatchDeleting, setIsBatchDeleting] = useState(false);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  const showToast = (msg: string) => {
+    setToastMessage(msg);
+    setTimeout(() => {
+      setToastMessage(null);
+    }, 2800);
+  };
+
+  const handleEnterSelectionMode = (initialPhotoId?: string | number) => {
+    setIsSelectionMode(true);
+    if (initialPhotoId !== undefined) {
+      setSelectedPhotoIds(new Set([initialPhotoId]));
+    } else {
+      setSelectedPhotoIds(new Set());
+    }
+  };
+
+  const handleExitSelectionMode = () => {
+    setIsSelectionMode(false);
+    setSelectedPhotoIds(new Set());
+  };
+
+  const handleToggleSelectPhoto = (photoId: string | number) => {
+    setSelectedPhotoIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(photoId)) {
+        next.delete(photoId);
+      } else {
+        next.add(photoId);
+        if (navigator.vibrate) {
+          try {
+            navigator.vibrate(25);
+          } catch {}
+        }
+      }
+      return next;
+    });
+  };
+
+  const handleSelectAll = () => {
+    if (selectedPhotoIds.size === filteredPhotos.length) {
+      setSelectedPhotoIds(new Set());
+    } else {
+      setSelectedPhotoIds(new Set(filteredPhotos.map((p) => p.id)));
+    }
+  };
+
+  const handleConfirmBatchDelete = async () => {
+    if (selectedPhotoIds.size === 0) return;
+    setIsBatchDeleting(true);
+
+    try {
+      const targets = photos.filter((p) => selectedPhotoIds.has(p.id));
+      const messageIds = Array.from(new Set(targets.map((p) => p.messageId)));
+
+      // 1. Xóa khỏi IndexedDB bộ nhớ đệm
+      await removePhotosFromCache(messageIds);
+
+      // 2. Cập nhật giao diện ngay lập tức
+      setPhotos((prev) => prev.filter((p) => !selectedPhotoIds.has(p.id)));
+
+      // 3. Xóa tin nhắn ảnh trên Kênh Telegram
+      await deleteTelegramPhotos(config, messageIds);
+
+      showToast(`Đã xóa thành công ${targets.length} ảnh! 🗑️`);
+    } catch (err) {
+      console.warn("Lỗi khi xóa hàng loạt ảnh:", err);
+      showToast("Có lỗi xảy ra khi xóa ảnh!");
+    } finally {
+      setIsBatchDeleting(false);
+      setIsBatchDeleteModalOpen(false);
+      setIsSelectionMode(false);
+      setSelectedPhotoIds(new Set());
+    }
+  };
+
+  const handleShareSelected = async () => {
+    if (selectedPhotoIds.size === 0) return;
+    const targets = photos.filter((p) => selectedPhotoIds.has(p.id));
+    const urls = targets.map((p) => p.url).join("\n");
+
+    try {
+      await Share.share({
+        title: `Chia sẻ ${targets.length} ảnh`,
+        text: `Bộ sưu tập ${targets.length} ảnh từ Telegram`,
+        url: targets[0]?.url,
+        dialogTitle: `Chia sẻ ${targets.length} ảnh`,
+      });
+    } catch {
+      try {
+        await Clipboard.write({ string: urls });
+        showToast(`Đã sao chép liên kết ${targets.length} ảnh!`);
+      } catch {}
+    }
+  };
 
   // Pull-to-Refresh State
   const [pullDistance, setPullDistance] = useState(0);
@@ -368,7 +475,23 @@ export const App: React.FC = () => {
         }}
         onRefresh={handleRefresh}
         isRefreshing={loading}
+        isSelectionMode={isSelectionMode}
+        selectedCount={selectedPhotoIds.size}
+        onToggleSelectionMode={() => {
+          if (isSelectionMode) handleExitSelectionMode();
+          else handleEnterSelectionMode();
+        }}
+        onSelectAll={handleSelectAll}
+        allSelected={filteredPhotos.length > 0 && selectedPhotoIds.size === filteredPhotos.length}
       />
+
+      {/* Floating Action Toast Notification */}
+      {toastMessage && (
+        <div className="fixed top-16 left-1/2 -translate-x-1/2 z-50 px-4 py-2 bg-neutral-900/95 border border-cyan-500/40 text-cyan-300 text-xs font-semibold rounded-full shadow-2xl backdrop-blur-md flex items-center gap-2 animate-in fade-in slide-in-from-top-2 duration-200">
+          <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
+          <span>{toastMessage}</span>
+        </div>
+      )}
 
       {/* Main Content Area with Pull-To-Refresh */}
       <main
@@ -498,6 +621,10 @@ export const App: React.FC = () => {
             <PhotoGrid
               groups={groupedPhotos}
               onSelectPhoto={(p) => setSelectedPhoto(p)}
+              isSelectionMode={isSelectionMode}
+              selectedPhotoIds={selectedPhotoIds}
+              onToggleSelectPhoto={handleToggleSelectPhoto}
+              onLongPressPhoto={(p) => handleEnterSelectionMode(p.id)}
             />
           </>
         )}
@@ -518,6 +645,10 @@ export const App: React.FC = () => {
             <PhotoGrid
               groups={groupedPhotos}
               onSelectPhoto={(p) => setSelectedPhoto(p)}
+              isSelectionMode={isSelectionMode}
+              selectedPhotoIds={selectedPhotoIds}
+              onToggleSelectPhoto={handleToggleSelectPhoto}
+              onLongPressPhoto={(p) => handleEnterSelectionMode(p.id)}
             />
           </div>
         )}
@@ -813,16 +944,104 @@ export const App: React.FC = () => {
         )}
       </main>
 
-      {/* iOS Bottom TabBar (Bo tròn viền kép kèm cột nút Thêm + và Tìm kiếm đồng bộ) */}
-      <TabBar
-        currentTab={currentTab}
-        onTabChange={setCurrentTab}
-        onOpenSettings={() => setIsSettingsOpen(true)}
-        onOpenAddPhoto={() => {
-          setAddUrl("");
-          setIsAddModalOpen(true);
-        }}
-      />
+      {/* iOS Bottom Selection Bar (Chuẩn Apple Photos - Thay thế TabBar khi đang chọn nhiều ảnh) */}
+      {isSelectionMode ? (
+        <div
+          style={{
+            paddingBottom: "max(calc(var(--sab) - 10px), 12px)",
+          }}
+          className="fixed inset-x-0 bottom-0 z-40 px-4 flex items-center justify-center pointer-events-none animate-in slide-in-from-bottom-6 duration-200"
+        >
+          <div
+            style={{
+              backdropFilter: "blur(24px)",
+              WebkitBackdropFilter: "blur(24px)",
+            }}
+            className="pointer-events-auto w-full max-w-md flex items-center justify-between px-6 py-2.5 bg-[#18181c]/90 border border-white/15 rounded-full shadow-2xl shadow-black/90 min-h-[56px]"
+          >
+            {/* Nút Chia sẻ các ảnh đã chọn */}
+            <button
+              onClick={handleShareSelected}
+              disabled={selectedPhotoIds.size === 0}
+              className="p-2 text-blue-400 active:opacity-60 disabled:opacity-30 disabled:text-neutral-500 transition-all rounded-full hover:bg-white/5"
+              title="Chia sẻ ảnh đã chọn"
+            >
+              <Share2 className="w-5 h-5" />
+            </button>
+
+            {/* Số lượng ảnh đã chọn */}
+            <span className="text-xs font-semibold text-neutral-200">
+              {selectedPhotoIds.size > 0
+                ? `Đã chọn ${selectedPhotoIds.size} ảnh`
+                : "Chạm vào ảnh để chọn"}
+            </span>
+
+            {/* Nút Xóa hàng loạt */}
+            <button
+              onClick={() => setIsBatchDeleteModalOpen(true)}
+              disabled={selectedPhotoIds.size === 0}
+              className="p-2 text-red-500 active:scale-90 disabled:opacity-30 disabled:text-neutral-500 transition-all rounded-full hover:bg-red-500/10"
+              title="Xóa các ảnh đã chọn"
+            >
+              <Trash2 className="w-5 h-5 stroke-[2.2]" />
+            </button>
+          </div>
+        </div>
+      ) : (
+        /* iOS Bottom TabBar bình thường */
+        <TabBar
+          currentTab={currentTab}
+          onTabChange={setCurrentTab}
+          onOpenSettings={() => setIsSettingsOpen(true)}
+          onOpenAddPhoto={() => {
+            setAddUrl("");
+            setIsAddModalOpen(true);
+          }}
+        />
+      )}
+
+      {/* Modal Xác nhận Xóa Hàng Loạt Ảnh (Chuẩn iOS ActionSheet) */}
+      {isBatchDeleteModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="w-full max-w-sm bg-neutral-900 border border-neutral-800 rounded-2xl p-5 shadow-2xl space-y-4 animate-in slide-in-from-bottom-4 duration-200">
+            <div className="text-center space-y-1.5">
+              <div className="w-12 h-12 rounded-full bg-red-950/60 border border-red-800/40 text-red-400 flex items-center justify-center mx-auto mb-2">
+                <Trash2 className="w-6 h-6 stroke-[2.2]" />
+              </div>
+              <h3 className="text-base font-bold text-white tracking-tight">
+                Xóa {selectedPhotoIds.size} ảnh đã chọn?
+              </h3>
+              <p className="text-xs text-neutral-400 leading-relaxed px-2">
+                Các ảnh này sẽ bị xóa vĩnh viễn khỏi Kênh Telegram và bộ nhớ thiết bị. Thao tác này không thể hoàn tác.
+              </p>
+            </div>
+
+            <div className="space-y-2 pt-1">
+              <button
+                onClick={handleConfirmBatchDelete}
+                disabled={isBatchDeleting}
+                className="w-full py-2.5 px-4 bg-red-600 hover:bg-red-500 active:bg-red-700 text-white text-xs font-semibold rounded-xl transition-colors flex items-center justify-center gap-2 disabled:opacity-50 shadow-lg shadow-red-900/30"
+              >
+                {isBatchDeleting ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                    <span>Đang xóa {selectedPhotoIds.size} ảnh...</span>
+                  </>
+                ) : (
+                  <span>Xóa {selectedPhotoIds.size} ảnh</span>
+                )}
+              </button>
+              <button
+                onClick={() => setIsBatchDeleteModalOpen(false)}
+                disabled={isBatchDeleting}
+                className="w-full py-2.5 px-4 bg-neutral-800 hover:bg-neutral-700 active:bg-neutral-600 text-neutral-300 text-xs font-medium rounded-xl transition-colors"
+              >
+                Hủy
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Modal Tải Ảnh Từ Instagram */}
       <AddPhotoModal

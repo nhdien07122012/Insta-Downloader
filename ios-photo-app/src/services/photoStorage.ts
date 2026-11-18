@@ -268,15 +268,26 @@ export async function getCacheStats(): Promise<{ count: number; sizeMB: string }
  * Xóa 1 ảnh cụ thể khỏi IndexedDB và giải phóng bộ nhớ
  */
 export async function removePhotoFromCache(messageId: number): Promise<void> {
-  const objUrl = objectUrlMap.get(messageId);
-  if (objUrl) {
-    URL.revokeObjectURL(objUrl);
-    objectUrlMap.delete(messageId);
-  }
-  const hdUrl = hdUrlMap.get(messageId);
-  if (hdUrl) {
-    URL.revokeObjectURL(hdUrl);
-    hdUrlMap.delete(messageId);
+  return removePhotosFromCache([messageId]);
+}
+
+/**
+ * Xóa nhiều ảnh cùng lúc khỏi IndexedDB và giải phóng bộ nhớ RAM
+ */
+export async function removePhotosFromCache(messageIds: number[]): Promise<void> {
+  if (messageIds.length === 0) return;
+
+  for (const messageId of messageIds) {
+    const objUrl = objectUrlMap.get(messageId);
+    if (objUrl) {
+      URL.revokeObjectURL(objUrl);
+      objectUrlMap.delete(messageId);
+    }
+    const hdUrl = hdUrlMap.get(messageId);
+    if (hdUrl) {
+      URL.revokeObjectURL(hdUrl);
+      hdUrlMap.delete(messageId);
+    }
   }
 
   try {
@@ -284,13 +295,14 @@ export async function removePhotoFromCache(messageId: number): Promise<void> {
     return new Promise((resolve, reject) => {
       const tx = db.transaction(STORE_NAME, "readwrite");
       const store = tx.objectStore(STORE_NAME);
-      const request = store.delete(messageId);
-
-      request.onsuccess = () => resolve();
-      request.onerror = () => reject(request.error);
+      for (const messageId of messageIds) {
+        store.delete(messageId);
+      }
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
     });
   } catch (e) {
-    console.warn(`Lỗi xóa ảnh ${messageId} khỏi IndexedDB:`, e);
+    console.warn(`Lỗi xóa danh sách ảnh khỏi IndexedDB:`, e);
   }
 }
 

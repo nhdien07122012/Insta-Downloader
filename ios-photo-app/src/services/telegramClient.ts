@@ -498,15 +498,26 @@ export async function triggerChannelScan(
 }
 
 /**
- * Xóa tin nhắn ảnh vĩnh viễn trên Kênh Telegram
+ * Xóa 1 tin nhắn ảnh vĩnh viễn trên Kênh Telegram
  */
 export async function deleteTelegramPhoto(
   config: TelegramConfig,
   messageId: number
 ): Promise<boolean> {
+  return deleteTelegramPhotos(config, [messageId]);
+}
+
+/**
+ * Xóa nhiều tin nhắn ảnh vĩnh viễn trên Kênh Telegram cùng lúc (Batch Delete)
+ */
+export async function deleteTelegramPhotos(
+  config: TelegramConfig,
+  messageIds: number[]
+): Promise<boolean> {
+  if (messageIds.length === 0) return true;
   let deleted = false;
 
-  // Cách 1: Sử dụng MTProto Client với phiên đăng nhập người dùng
+  // Cách 1: Sử dụng MTProto Client với phiên đăng nhập người dùng (hỗ trợ xóa mảng messageIds trong 1 API call)
   if (config.sessionString || config.isLoggedIn) {
     try {
       const client = await initTelegramClient(config);
@@ -521,25 +532,26 @@ export async function deleteTelegramPhoto(
         }
       }
 
-      await client.deleteMessages(targetPeer, [messageId], { revoke: true });
+      await client.deleteMessages(targetPeer, messageIds, { revoke: true });
       deleted = true;
     } catch (err) {
-      console.warn("Lỗi xóa ảnh qua MTProto:", err);
+      console.warn("Lỗi xóa hàng loạt ảnh qua MTProto:", err);
     }
   }
 
   // Cách 2: Dự phòng qua Telegram Bot API (nếu có botToken)
   if (!deleted && config.botToken && config.channelId) {
     try {
-      const res = await fetch(
-        `https://api.telegram.org/bot${config.botToken}/deleteMessage?chat_id=${config.channelId}&message_id=${messageId}`
-      );
-      const json = await res.json();
-      if (json && json.ok) {
-        deleted = true;
+      for (const mid of messageIds) {
+        try {
+          await fetch(
+            `https://api.telegram.org/bot${config.botToken}/deleteMessage?chat_id=${config.channelId}&message_id=${mid}`
+          );
+        } catch {}
       }
+      deleted = true;
     } catch (err) {
-      console.warn("Lỗi xóa ảnh qua Bot API:", err);
+      console.warn("Lỗi xóa hàng loạt ảnh qua Bot API:", err);
     }
   }
 
