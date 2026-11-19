@@ -1062,6 +1062,7 @@ export const App: React.FC = () => {
             favorites.has(String(selectedPhoto.id)) ||
             favorites.has(String(selectedPhoto.messageId))
           }
+          favorites={favorites}
           onToggleFavorite={toggleFavorite}
           onClose={() => setSelectedPhoto(null)}
           onSelectPhoto={(p) => setSelectedPhoto(p)}

@@ -4,6 +4,22 @@ Toàn bộ các phiên bản cập nhật, mã bản dựng (build number), chi 
 
 ---
 
+## [v1.6.1 (Build 23)] - 2026-11-19
+- **Commit SHA**: (Sẽ cập nhật sau khi push)
+- **Mục tiêu**: **Khắc phục triệt để hiện tượng ảnh bị chớp/nhấp nháy đen/tắt khi vuốt chuyển ảnh (Flicker-Free Apple Carousel & In-Memory HD Cache)**:
+  1. **Quản lý chỉ số ảnh nội bộ (Local `currentIndex` Synchronization)**: Tách biệt chỉ mục ảnh hiện tại bên trong `PhotoViewer` khỏi độ trễ bất đồng bộ khi cập nhật `selectedPhoto` của `App.tsx`. Khi hoạt ảnh vuốt kết thúc, chỉ mục ảnh và vị trí `slideOffset` được cập nhật đồng thời trong cùng một chu kỳ render (single batch), loại bỏ 100% tình trạng ảnh cũ bị giật ngược lại 1-2 frames trước khi chuyển sang ảnh mới.
+  2. **Kiến trúc ảnh 2 lớp chống chớp đen (Double-Layered Rendering)**: Giữ cố định ảnh thumbnail/base image bên dưới (`decoding="sync"`), lớp ảnh HD độ phân giải cao phủ lên trên mượt mà khi tải xong. Người dùng không bao giờ thấy màn hình đen hoặc khung hình rỗng khi lướt ảnh.
+  3. **Bộ nhớ đệm HD liên tục (`hdCacheRef`) & Tải trước ngầm (Adjacent Preloading)**: Lưu trữ vĩnh viễn các URL ảnh HD đã tải trong suốt phiên xem; đồng thời tự động nạp trước ảnh chất lượng cao của ảnh kế tiếp và ảnh trước đó trong nền, giúp thao tác lướt qua lại diễn ra tức thì, không cần tải lại và không giật lag.
+  4. **Đồng bộ phần cứng (`onTransitionEnd` & Fluid Interruption)**: Lắng nghe sự kiện kết thúc chuyển động phần cứng GPU thay vì `setTimeout` cố định; hỗ trợ ngắt chuyển động tức thì khi ngón tay chạm lại giúp người dùng có thể lướt liên tục cực kỳ nhạy và mượt như Apple Photos gốc trên iOS.
+  5. **Đồng bộ hóa Trạng thái Yêu thích & Thông tin chi tiết**: Truyền bộ `favorites` trực tiếp vào `PhotoViewer` để nút trái tim và ngày tháng hiển thị chính xác theo từng ảnh khi lướt.
+- **Link tải IPA trực tiếp**: [https://github.com/nhdien07122012/Insta-Downloader/releases/latest/download/InstaPhotos.ipa](https://github.com/nhdien07122012/Insta-Downloader/releases/latest/download/InstaPhotos.ipa)
+- **Lệnh hoàn tác mẫu (Rollback)**:
+  ```bash
+  git revert HEAD --no-edit
+  ```
+
+---
+
 ## [v1.6.0 (Build 22)] - 2026-11-19
 - **Commit SHA**: (Sẽ cập nhật sau khi push)
 - **Mục tiêu**: 

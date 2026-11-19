@@ -22,6 +22,7 @@ interface PhotoViewerProps {
   allPhotos: PhotoItem[];
   config: TelegramConfig;
   isFavorite: boolean;
+  favorites?: Set<string>;
   onToggleFavorite: (id: string) => void;
   onClose: () => void;
   onSelectPhoto: (p: PhotoItem) => void;
@@ -33,6 +34,7 @@ export const PhotoViewer: React.FC<PhotoViewerProps> = ({
   allPhotos,
   config,
   isFavorite,
+  favorites,
   onToggleFavorite,
   onClose,
   onSelectPhoto,
@@ -40,24 +42,39 @@ export const PhotoViewer: React.FC<PhotoViewerProps> = ({
 }) => {
   const [showInfo, setShowInfo] = useState(false);
   const [uiVisible, setUiVisible] = useState(true);
-  const [hdUrl, setHdUrl] = useState<string | null>(null);
-  const [loadingHd, setLoadingHd] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const [isConfirmDeleteOpen, setIsConfirmDeleteOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+
+  // Local index state so swiping is instantaneous, smooth, and immune to prop lag
+  const [currentIndex, setCurrentIndex] = useState<number>(() => {
+    if (!photo) return 0;
+    const idx = allPhotos.findIndex((p) => p.id === photo.id);
+    return idx >= 0 ? idx : 0;
+  });
 
   // Zoom & Pan state
   const [scale, setScale] = useState(1);
   const [position, setPosition] = useState({ x: 0, y: 0 });
   const [isGesturing, setIsGesturing] = useState(false);
 
-  // Apple Photos Carousel Track State
+  // Carousel Track State
   const [slideOffset, setSlideOffset] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
   const [isAnimating, setIsAnimating] = useState(false);
+
+  // Direction of the active slide animation: "next" | "prev" | "none"
+  const slideDirectionRef = useRef<"next" | "prev" | "none">("none");
   const swipeStartRef = useRef<{ x: number; y: number; time: number }>({ x: 0, y: 0, time: 0 });
   const isSwipeGestureRef = useRef<boolean>(false);
   const animationTimerRef = useRef<any>(null);
+
+  // Persistent in-memory HD Cache across the entire viewing session
+  // Key: messageId, Value: HD ObjectURL / blob URL
+  const hdCacheRef = useRef<Map<number, string>>(new Map());
+  const [hdUrl, setHdUrl] = useState<string | null>(null);
+  const [loadingHd, setLoadingHd] = useState(false);
+  const [hdLoaded, setHdLoaded] = useState(false);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const touchStartRef = useRef<{ dist: number; scale: number; x: number; y: number; touches: number }>({
@@ -78,25 +95,91 @@ export const PhotoViewer: React.FC<PhotoViewerProps> = ({
     }, 2800);
   };
 
-  // Reset zoom & pan when switching photo
+  // Keep local index in sync if photo prop changes from outside (e.g. user clicked another photo in grid)
   useEffect(() => {
-    setScale(1);
-    setPosition({ x: 0, y: 0 });
-    setSlideOffset(0);
-    setIsDragging(false);
-    setIsAnimating(false);
-    isSwipeGestureRef.current = false;
-    let active = true;
-    setHdUrl(null);
     if (!photo) return;
+    const idx = allPhotos.findIndex((p) => p.id === photo.id);
+    if (idx >= 0 && idx !== currentIndex) {
+      setCurrentIndex(idx);
+      setScale(1);
+      setPosition({ x: 0, y: 0 });
+      setSlideOffset(0);
+      setIsDragging(false);
+      setIsAnimating(false);
+    }
+  }, [photo?.id]);
 
-    setLoadingHd(true);
-    fetchFullResolutionPhoto(config, photo.messageId).then((url) => {
-      if (active && url) {
-        setHdUrl(url);
+  const currPhoto = allPhotos[currentIndex] || photo;
+  const hasPrev = currentIndex > 0;
+  const hasNext = currentIndex < allPhotos.length - 1;
+  const prevPhoto = hasPrev ? allPhotos[currentIndex - 1] : null;
+  const nextPhoto = hasNext ? allPhotos[currentIndex + 1] : null;
+
+  // HD Loading & Adjacent Photos Preloading Effect
+  useEffect(() => {
+    if (!currPhoto) return;
+
+    let active = true;
+    const mid = currPhoto.messageId;
+
+    // 1. Check if HD is already cached in memory
+    const cached = hdCacheRef.current.get(mid);
+    if (cached) {
+      setHdUrl(cached);
+      setLoadingHd(false);
+      setHdLoaded(true);
+    } else {
+      setHdUrl(null);
+      setHdLoaded(false);
+      if (currPhoto.mediaType !== "video") {
+        setLoadingHd(true);
+        fetchFullResolutionPhoto(config, mid)
+          .then((url) => {
+            if (!active) return;
+            if (url) {
+              hdCacheRef.current.set(mid, url);
+              setHdUrl(url);
+            }
+            setLoadingHd(false);
+          })
+          .catch(() => {
+            if (active) setLoadingHd(false);
+          });
       }
-      if (active) setLoadingHd(false);
-    });
+    }
+
+    // 2. Preload adjacent photos (next and previous) in background for instant swipe
+    if (nextPhoto) {
+      const img = new Image();
+      img.src = nextPhoto.thumbnailUrl || nextPhoto.url;
+      if (!hdCacheRef.current.has(nextPhoto.messageId) && nextPhoto.mediaType !== "video") {
+        fetchFullResolutionPhoto(config, nextPhoto.messageId)
+          .then((nUrl) => {
+            if (nUrl) {
+              hdCacheRef.current.set(nextPhoto.messageId, nUrl);
+              const nImg = new Image();
+              nImg.src = nUrl;
+            }
+          })
+          .catch(() => {});
+      }
+    }
+
+    if (prevPhoto) {
+      const img = new Image();
+      img.src = prevPhoto.thumbnailUrl || prevPhoto.url;
+      if (!hdCacheRef.current.has(prevPhoto.messageId) && prevPhoto.mediaType !== "video") {
+        fetchFullResolutionPhoto(config, prevPhoto.messageId)
+          .then((pUrl) => {
+            if (pUrl) {
+              hdCacheRef.current.set(prevPhoto.messageId, pUrl);
+              const pImg = new Image();
+              pImg.src = pUrl;
+            }
+          })
+          .catch(() => {});
+      }
+    }
 
     return () => {
       active = false;
@@ -104,42 +187,77 @@ export const PhotoViewer: React.FC<PhotoViewerProps> = ({
         clearTimeout(animationTimerRef.current);
       }
     };
-  }, [photo?.id, photo?.messageId]);
+  }, [currentIndex, currPhoto?.messageId]);
 
-  if (!photo) return null;
+  if (!photo || !currPhoto) return null;
 
-  const currentIndex = allPhotos.findIndex((p) => p.id === photo.id);
-  const hasPrev = currentIndex > 0;
-  const hasNext = currentIndex < allPhotos.length - 1;
-  const prevPhoto = hasPrev ? allPhotos[currentIndex - 1] : null;
-  const nextPhoto = hasNext ? allPhotos[currentIndex + 1] : null;
+  // Dynamic favorite status for the current active photo
+  const isCurrentFavorite = favorites
+    ? favorites.has(String(currPhoto.id)) || favorites.has(String(currPhoto.messageId))
+    : isFavorite;
+
+  // Finalize the transition smoothly in a single React render batch
+  const finalizeTransition = () => {
+    if (animationTimerRef.current) {
+      clearTimeout(animationTimerRef.current);
+      animationTimerRef.current = null;
+    }
+
+    const dir = slideDirectionRef.current;
+    slideDirectionRef.current = "none";
+
+    if (dir === "next" && hasNext) {
+      const newIdx = currentIndex + 1;
+      setCurrentIndex(newIdx);
+      setSlideOffset(0);
+      setIsAnimating(false);
+      setScale(1);
+      setPosition({ x: 0, y: 0 });
+      const nextP = allPhotos[newIdx];
+      if (nextP) onSelectPhoto(nextP);
+    } else if (dir === "prev" && hasPrev) {
+      const newIdx = currentIndex - 1;
+      setCurrentIndex(newIdx);
+      setSlideOffset(0);
+      setIsAnimating(false);
+      setScale(1);
+      setPosition({ x: 0, y: 0 });
+      const prevP = allPhotos[newIdx];
+      if (prevP) onSelectPhoto(prevP);
+    } else {
+      setSlideOffset(0);
+      setIsAnimating(false);
+    }
+  };
 
   const handlePrev = (e?: React.MouseEvent) => {
     e?.stopPropagation();
-    if (!hasPrev || isAnimating) return;
+    if (!hasPrev) return;
+    if (isAnimating) {
+      finalizeTransition();
+    }
     const width = containerRef.current?.clientWidth || window.innerWidth;
+    slideDirectionRef.current = "prev";
     setIsAnimating(true);
     setIsDragging(false);
     setSlideOffset(width + GAP);
-    animationTimerRef.current = setTimeout(() => {
-      onSelectPhoto(allPhotos[currentIndex - 1]);
-      setSlideOffset(0);
-      setIsAnimating(false);
-    }, 310);
+    // Safety fallback timer in case onTransitionEnd does not fire
+    animationTimerRef.current = setTimeout(finalizeTransition, 350);
   };
 
   const handleNext = (e?: React.MouseEvent) => {
     e?.stopPropagation();
-    if (!hasNext || isAnimating) return;
+    if (!hasNext) return;
+    if (isAnimating) {
+      finalizeTransition();
+    }
     const width = containerRef.current?.clientWidth || window.innerWidth;
+    slideDirectionRef.current = "next";
     setIsAnimating(true);
     setIsDragging(false);
     setSlideOffset(-(width + GAP));
-    animationTimerRef.current = setTimeout(() => {
-      onSelectPhoto(allPhotos[currentIndex + 1]);
-      setSlideOffset(0);
-      setIsAnimating(false);
-    }, 310);
+    // Safety fallback timer in case onTransitionEnd does not fire
+    animationTimerRef.current = setTimeout(finalizeTransition, 350);
   };
 
   // Keyboard navigation
@@ -155,7 +273,10 @@ export const PhotoViewer: React.FC<PhotoViewerProps> = ({
 
   // Touch Handlers for Pinch to Zoom, Pan & Smooth Apple Photos Carousel Swipe
   const handleTouchStart = (e: React.TouchEvent) => {
-    if (isAnimating) return;
+    // If user touches while animation is in flight, finalize immediately for zero latency
+    if (isAnimating) {
+      finalizeTransition();
+    }
 
     if (e.touches.length === 2) {
       // 2 fingers: Pinch to zoom
@@ -215,8 +336,6 @@ export const PhotoViewer: React.FC<PhotoViewerProps> = ({
   };
 
   const handleTouchMove = (e: React.TouchEvent) => {
-    if (isAnimating) return;
-
     if (e.touches.length === 2 && touchStartRef.current.touches === 2) {
       e.preventDefault();
       const dist = Math.hypot(
@@ -252,7 +371,7 @@ export const PhotoViewer: React.FC<PhotoViewerProps> = ({
 
       if (isSwipeGestureRef.current) {
         e.preventDefault();
-        // Rubber-band resistance at start and end
+        // Rubber-band resistance at boundaries
         let effectiveOffset = deltaX;
         if (!hasPrev && deltaX > 0) {
           effectiveOffset = deltaX * 0.28;
@@ -265,7 +384,6 @@ export const PhotoViewer: React.FC<PhotoViewerProps> = ({
   };
 
   const handleTouchEnd = () => {
-    if (isAnimating) return;
     setIsGesturing(false);
 
     if (scale < 1.05) {
@@ -286,30 +404,23 @@ export const PhotoViewer: React.FC<PhotoViewerProps> = ({
       const isDragPassed = Math.abs(slideOffset) > width * 0.22;
 
       if (slideOffset < 0 && (isDragPassed || isQuickFlick) && hasNext) {
-        // Vuốt sang trái -> Trượt sang ảnh tiếp theo với hiệu ứng vật lý Apple Photos
+        // Vuốt sang trái -> Trượt sang ảnh tiếp theo với hiệu ứng Apple Photos
+        slideDirectionRef.current = "next";
         setIsAnimating(true);
         setSlideOffset(-stride);
-        animationTimerRef.current = setTimeout(() => {
-          onSelectPhoto(allPhotos[currentIndex + 1]);
-          setSlideOffset(0);
-          setIsAnimating(false);
-        }, 310);
+        animationTimerRef.current = setTimeout(finalizeTransition, 350);
       } else if (slideOffset > 0 && (isDragPassed || isQuickFlick) && hasPrev) {
-        // Vuốt sang phải -> Trượt sang ảnh trước đó với hiệu ứng vật lý Apple Photos
+        // Vuốt sang phải -> Trượt sang ảnh trước đó với hiệu ứng Apple Photos
+        slideDirectionRef.current = "prev";
         setIsAnimating(true);
         setSlideOffset(stride);
-        animationTimerRef.current = setTimeout(() => {
-          onSelectPhoto(allPhotos[currentIndex - 1]);
-          setSlideOffset(0);
-          setIsAnimating(false);
-        }, 310);
+        animationTimerRef.current = setTimeout(finalizeTransition, 350);
       } else {
         // Không đủ ngưỡng vuốt -> Bật lò xo mượt mà quay về vị trí ban đầu
+        slideDirectionRef.current = "none";
         setIsAnimating(true);
         setSlideOffset(0);
-        animationTimerRef.current = setTimeout(() => {
-          setIsAnimating(false);
-        }, 310);
+        animationTimerRef.current = setTimeout(finalizeTransition, 350);
       }
     }
   };
@@ -317,20 +428,20 @@ export const PhotoViewer: React.FC<PhotoViewerProps> = ({
   // Tải ảnh hoặc video về máy iPhone (Hỗ trợ iOS Camera Roll)
   const handleDownload = async (e: React.MouseEvent) => {
     e.stopPropagation();
-    const isVideo = photo.mediaType === "video";
+    const isVideo = currPhoto.mediaType === "video";
     const ext = isVideo ? "mp4" : "jpg";
     const mime = isVideo ? "video/mp4" : "image/jpeg";
-    const platformPrefix = photo.platform === "twitter" ? "twitter" : "instagram";
+    const platformPrefix = currPhoto.platform === "twitter" ? "twitter" : "instagram";
 
     showToast(isVideo ? "Đang chuẩn bị video chất lượng cao..." : "Đang chuẩn bị ảnh chất lượng cao...");
 
     try {
-      const targetUrl = hdUrl || photo.url;
+      const targetUrl = hdUrl || currPhoto.url;
       const res = await fetch(targetUrl);
       const blob = await res.blob();
       const file = new File(
         [blob],
-        `${platformPrefix}_${photo.author || (isVideo ? "video" : "photo")}_${Date.now()}.${ext}`,
+        `${platformPrefix}_${currPhoto.author || (isVideo ? "video" : "photo")}_${Date.now()}.${ext}`,
         { type: mime }
       );
 
@@ -352,8 +463,8 @@ export const PhotoViewer: React.FC<PhotoViewerProps> = ({
     // Cách 2: Browser download fallback (trình duyệt máy tính hoặc Android)
     try {
       const a = document.createElement("a");
-      a.href = hdUrl || photo.url;
-      a.download = `${platformPrefix}_${photo.author || (isVideo ? "video" : "photo")}_${Date.now()}.${ext}`;
+      a.href = hdUrl || currPhoto.url;
+      a.download = `${platformPrefix}_${currPhoto.author || (isVideo ? "video" : "photo")}_${Date.now()}.${ext}`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -366,27 +477,27 @@ export const PhotoViewer: React.FC<PhotoViewerProps> = ({
   // Chia sẻ ảnh/video (Native iOS Share Sheet)
   const handleShare = async (e: React.MouseEvent) => {
     e.stopPropagation();
-    const isVideo = photo.mediaType === "video";
+    const isVideo = currPhoto.mediaType === "video";
     const ext = isVideo ? "mp4" : "jpg";
     const mime = isVideo ? "video/mp4" : "image/jpeg";
-    const platformName = photo.platform === "twitter" ? "Twitter (X)" : "Instagram";
+    const platformName = currPhoto.platform === "twitter" ? "Twitter (X)" : "Instagram";
 
     // 1. Chia sẻ File qua Web Share API
     try {
-      const targetUrl = hdUrl || photo.url;
+      const targetUrl = hdUrl || currPhoto.url;
       const res = await fetch(targetUrl);
       const blob = await res.blob();
       const file = new File(
         [blob],
-        `${photo.platform || "media"}_${photo.author || "file"}.${ext}`,
+        `${currPhoto.platform || "media"}_${currPhoto.author || "file"}.${ext}`,
         { type: mime }
       );
 
       if (navigator.canShare && navigator.canShare({ files: [file] })) {
         await navigator.share({
           files: [file],
-          title: `${isVideo ? "Video" : "Ảnh"} từ @${photo.author || platformName}`,
-          text: photo.caption,
+          title: `${isVideo ? "Video" : "Ảnh"} từ @${currPhoto.author || platformName}`,
+          text: currPhoto.caption,
         });
         return;
       }
@@ -395,19 +506,19 @@ export const PhotoViewer: React.FC<PhotoViewerProps> = ({
     // 2. Chia sẻ link qua Capacitor Native Share
     try {
       await Share.share({
-        title: `${isVideo ? "Video" : "Ảnh"} từ @${photo.author || platformName}`,
-        text: photo.caption || `${isVideo ? "Video" : "Ảnh"} từ ${platformName}`,
-        url: photo.originalUrl || undefined,
+        title: `${isVideo ? "Video" : "Ảnh"} từ @${currPhoto.author || platformName}`,
+        text: currPhoto.caption || `${isVideo ? "Video" : "Ảnh"} từ ${platformName}`,
+        url: currPhoto.originalUrl || undefined,
         dialogTitle: `Chia sẻ ${isVideo ? "video" : "ảnh"}`,
       });
       return;
     } catch {}
 
     // 3. Sao chép link nếu không mở được share
-    if (photo.originalUrl) {
+    if (currPhoto.originalUrl) {
       try {
-        await navigator.clipboard.writeText(photo.originalUrl);
-        showToast("Đã sao chép liên kết Instagram!");
+        await navigator.clipboard.writeText(currPhoto.originalUrl);
+        showToast("Đã sao chép liên kết!");
       } catch {}
     }
   };
@@ -437,7 +548,7 @@ export const PhotoViewer: React.FC<PhotoViewerProps> = ({
 
         <div className="text-center">
           <p className="text-sm font-semibold text-white">
-            {photo.date.toLocaleDateString("vi-VN", {
+            {currPhoto.date.toLocaleDateString("vi-VN", {
               day: "numeric",
               month: "short",
               year: "numeric",
@@ -479,6 +590,11 @@ export const PhotoViewer: React.FC<PhotoViewerProps> = ({
               ? "transform 0.32s cubic-bezier(0.16, 1, 0.3, 1)"
               : "none",
           }}
+          onTransitionEnd={(e) => {
+            if (e.target === e.currentTarget && e.propertyName === "transform" && isAnimating) {
+              finalizeTransition();
+            }
+          }}
         >
           {/* SLIDE TRƯỚC (Previous Photo - trượt vào từ bên trái) */}
           {prevPhoto && (
@@ -494,6 +610,7 @@ export const PhotoViewer: React.FC<PhotoViewerProps> = ({
                     src={prevPhoto.thumbnailUrl || prevPhoto.url}
                     alt=""
                     className="max-w-full max-h-[80vh] rounded-2xl object-contain shadow-2xl"
+                    decoding="sync"
                   />
                   <div className="absolute inset-0 flex items-center justify-center">
                     <div className="w-12 h-12 rounded-full bg-black/60 backdrop-blur-md flex items-center justify-center text-white shadow-xl">
@@ -502,19 +619,30 @@ export const PhotoViewer: React.FC<PhotoViewerProps> = ({
                   </div>
                 </div>
               ) : (
-                <img
-                  src={prevPhoto.thumbnailUrl || prevPhoto.url}
-                  alt=""
-                  className="max-w-full max-h-full object-contain"
-                  loading="eager"
-                />
+                <div className="relative w-full h-full flex items-center justify-center">
+                  <img
+                    src={prevPhoto.thumbnailUrl || prevPhoto.url}
+                    alt=""
+                    className="max-w-full max-h-full object-contain"
+                    decoding="sync"
+                    loading="eager"
+                  />
+                  {hdCacheRef.current.get(prevPhoto.messageId) && (
+                    <img
+                      src={hdCacheRef.current.get(prevPhoto.messageId)}
+                      alt=""
+                      className="absolute inset-0 m-auto max-w-full max-h-full object-contain pointer-events-none"
+                      decoding="sync"
+                    />
+                  )}
+                </div>
               )}
             </div>
           )}
 
           {/* SLIDE HIỆN TẠI (Current Photo - ở trung tâm) */}
           <div
-            className="w-full h-full flex items-center justify-center p-2 select-none"
+            className="w-full h-full flex items-center justify-center p-2 select-none relative"
             style={{
               transform:
                 scale > 1
@@ -523,11 +651,11 @@ export const PhotoViewer: React.FC<PhotoViewerProps> = ({
               transition: isGesturing ? "none" : "transform 0.25s cubic-bezier(0.2, 0, 0, 1)",
             }}
           >
-            {photo.mediaType === "video" ? (
+            {currPhoto.mediaType === "video" ? (
               <video
-                key={hdUrl || photo.url}
-                src={hdUrl || photo.url}
-                poster={photo.thumbnailUrl}
+                key={hdUrl || currPhoto.url}
+                src={hdUrl || currPhoto.url}
+                poster={currPhoto.thumbnailUrl}
                 controls
                 playsInline
                 autoPlay
@@ -535,11 +663,29 @@ export const PhotoViewer: React.FC<PhotoViewerProps> = ({
                 className="max-w-full max-h-[80vh] rounded-2xl object-contain shadow-2xl pointer-events-auto"
               />
             ) : (
-              <img
-                src={hdUrl || photo.url}
-                alt={photo.caption || "Fullscreen view"}
-                className="max-w-full max-h-full object-contain pointer-events-auto select-none"
-              />
+              <div className="relative w-full h-full flex items-center justify-center">
+                {/* Lớp nền: Thumbnail/Base Image (LUÔN CÓ SẴN TRONG BỘ NHỚ, KHÔNG BAO GIỜ BỊ CHỚP ĐEN) */}
+                <img
+                  src={currPhoto.thumbnailUrl || currPhoto.url}
+                  alt={currPhoto.caption || "Fullscreen view"}
+                  className="max-w-full max-h-full object-contain select-none pointer-events-auto"
+                  decoding="sync"
+                />
+
+                {/* Lớp HD: Nét căng, phủ lên trên mượt mà khi đã sẵn sàng */}
+                {hdUrl && (
+                  <img
+                    key={hdUrl}
+                    src={hdUrl}
+                    alt={currPhoto.caption || "Fullscreen view HD"}
+                    className={`absolute inset-0 m-auto max-w-full max-h-full object-contain pointer-events-auto select-none transition-opacity duration-200 ${
+                      hdLoaded ? "opacity-100" : "opacity-0"
+                    }`}
+                    decoding="sync"
+                    onLoad={() => setHdLoaded(true)}
+                  />
+                )}
+              </div>
             )}
           </div>
 
@@ -557,6 +703,7 @@ export const PhotoViewer: React.FC<PhotoViewerProps> = ({
                     src={nextPhoto.thumbnailUrl || nextPhoto.url}
                     alt=""
                     className="max-w-full max-h-[80vh] rounded-2xl object-contain shadow-2xl"
+                    decoding="sync"
                   />
                   <div className="absolute inset-0 flex items-center justify-center">
                     <div className="w-12 h-12 rounded-full bg-black/60 backdrop-blur-md flex items-center justify-center text-white shadow-xl">
@@ -565,12 +712,23 @@ export const PhotoViewer: React.FC<PhotoViewerProps> = ({
                   </div>
                 </div>
               ) : (
-                <img
-                  src={nextPhoto.thumbnailUrl || nextPhoto.url}
-                  alt=""
-                  className="max-w-full max-h-full object-contain"
-                  loading="eager"
-                />
+                <div className="relative w-full h-full flex items-center justify-center">
+                  <img
+                    src={nextPhoto.thumbnailUrl || nextPhoto.url}
+                    alt=""
+                    className="max-w-full max-h-full object-contain"
+                    decoding="sync"
+                    loading="eager"
+                  />
+                  {hdCacheRef.current.get(nextPhoto.messageId) && (
+                    <img
+                      src={hdCacheRef.current.get(nextPhoto.messageId)}
+                      alt=""
+                      className="absolute inset-0 m-auto max-w-full max-h-full object-contain pointer-events-none"
+                      decoding="sync"
+                    />
+                  )}
+                </div>
               )}
             </div>
           )}
@@ -631,15 +789,15 @@ export const PhotoViewer: React.FC<PhotoViewerProps> = ({
         <button
           onClick={(e) => {
             e.stopPropagation();
-            onToggleFavorite(String(photo.id));
-            showToast(isFavorite ? "Đã xóa khỏi Mục yêu thích" : "Đã thêm vào Mục yêu thích ❤️");
+            onToggleFavorite(String(currPhoto.id));
+            showToast(isCurrentFavorite ? "Đã xóa khỏi Mục yêu thích" : "Đã thêm vào Mục yêu thích ❤️");
           }}
           className={`p-2 transition-transform active:scale-125 ${
-            isFavorite ? "text-red-500" : "text-neutral-300"
+            isCurrentFavorite ? "text-red-500" : "text-neutral-300"
           }`}
           title="Yêu thích ảnh"
         >
-          <Heart className={`w-6 h-6 ${isFavorite ? "fill-red-500 text-red-500 scale-110" : ""}`} />
+          <Heart className={`w-6 h-6 ${isCurrentFavorite ? "fill-red-500 text-red-500 scale-110" : ""}`} />
         </button>
 
         {/* Nút Thông tin (i) */}
@@ -685,8 +843,8 @@ export const PhotoViewer: React.FC<PhotoViewerProps> = ({
         >
           <div className="flex items-center justify-between pb-4 border-b border-neutral-800">
             <h3 className="text-lg font-bold">
-              {photo.mediaType === "video" ? "Chi tiết Video" : "Chi tiết ảnh"}{" "}
-              {photo.platform === "twitter" ? "Twitter (X)" : "Instagram"}
+              {currPhoto.mediaType === "video" ? "Chi tiết Video" : "Chi tiết ảnh"}{" "}
+              {currPhoto.platform === "twitter" ? "Twitter (X)" : "Instagram"}
             </h3>
             <button
               onClick={() => setShowInfo(false)}
@@ -697,20 +855,20 @@ export const PhotoViewer: React.FC<PhotoViewerProps> = ({
           </div>
 
           <div className="space-y-4 pt-4 text-sm">
-            {photo.author && (
+            {currPhoto.author && (
               <div>
                 <p className="text-neutral-400 text-xs">
-                  Tác giả {photo.platform === "twitter" ? "Twitter (X)" : "Instagram"}
+                  Tác giả {currPhoto.platform === "twitter" ? "Twitter (X)" : "Instagram"}
                 </p>
-                <p className="font-semibold text-blue-400">@{photo.author}</p>
+                <p className="font-semibold text-blue-400">@{currPhoto.author}</p>
               </div>
             )}
 
-            {photo.caption && (
+            {currPhoto.caption && (
               <div>
                 <p className="text-neutral-400 text-xs mb-1">Nội dung bài viết (Caption)</p>
                 <p className="text-neutral-200 text-xs leading-relaxed bg-neutral-800/60 p-3 rounded-xl border border-neutral-800 font-normal">
-                  {photo.caption}
+                  {currPhoto.caption}
                 </p>
               </div>
             )}
@@ -719,7 +877,7 @@ export const PhotoViewer: React.FC<PhotoViewerProps> = ({
               <div className="bg-neutral-800/40 p-3 rounded-xl border border-neutral-800">
                 <p className="text-neutral-400 text-xs">Ngày lưu trữ</p>
                 <p className="text-xs font-medium text-white mt-0.5">
-                  {photo.date.toLocaleDateString("vi-VN", {
+                  {currPhoto.date.toLocaleDateString("vi-VN", {
                     day: "numeric",
                     month: "long",
                     year: "numeric",
@@ -730,25 +888,25 @@ export const PhotoViewer: React.FC<PhotoViewerProps> = ({
               <div className="bg-neutral-800/40 p-3 rounded-xl border border-neutral-800">
                 <p className="text-neutral-400 text-xs">Mã tin nhắn Kênh</p>
                 <p className="text-xs font-mono text-neutral-300 mt-0.5">
-                  #{photo.messageId}
+                  #{currPhoto.messageId}
                 </p>
               </div>
             </div>
 
-            {photo.originalUrl && (
+            {currPhoto.originalUrl && (
               <div className="pt-2">
                 <a
-                  href={photo.originalUrl}
+                  href={currPhoto.originalUrl}
                   target="_blank"
                   rel="noopener noreferrer"
                   className={`w-full py-3 rounded-xl font-medium text-white text-xs flex items-center justify-center gap-1.5 active:opacity-80 shadow-md ${
-                    photo.platform === "twitter"
+                    currPhoto.platform === "twitter"
                       ? "bg-neutral-800 hover:bg-neutral-700 border border-neutral-700"
                       : "bg-gradient-to-r from-pink-600 to-purple-600"
                   }`}
                 >
                   <span>
-                    Mở bài viết gốc trên {photo.platform === "twitter" ? "Twitter (X)" : "Instagram"}
+                    Mở bài viết gốc trên {currPhoto.platform === "twitter" ? "Twitter (X)" : "Instagram"}
                   </span>
                   <ExternalLink className="w-3.5 h-3.5" />
                 </a>
@@ -783,7 +941,7 @@ export const PhotoViewer: React.FC<PhotoViewerProps> = ({
                 type="button"
                 disabled={isDeleting}
                 onClick={async () => {
-                  if (!onDeletePhoto || !photo) return;
+                  if (!onDeletePhoto || !currPhoto) return;
                   setIsDeleting(true);
                   try {
                     const nextTarget = hasNext
@@ -792,11 +950,15 @@ export const PhotoViewer: React.FC<PhotoViewerProps> = ({
                       ? allPhotos[currentIndex - 1]
                       : null;
 
-                    await onDeletePhoto(photo.messageId);
+                    await onDeletePhoto(currPhoto.messageId);
                     showToast("Đã xóa ảnh thành công 🗑️");
                     setIsConfirmDeleteOpen(false);
 
                     if (nextTarget) {
+                      const nextIdx = allPhotos.findIndex((p) => p.id === nextTarget.id);
+                      if (nextIdx >= 0) {
+                        setCurrentIndex(nextIdx);
+                      }
                       onSelectPhoto(nextTarget);
                     } else {
                       onClose();
