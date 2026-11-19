@@ -5,7 +5,7 @@ Toàn bộ các phiên bản cập nhật, mã bản dựng (build number), chi 
 ---
 
 ## [v1.6.1 (Build 23)] - 2026-11-19
-- **Commit SHA**: (Sẽ cập nhật sau khi push)
+- **Commit SHA**: `4f310c9`
 - **Mục tiêu**: **Khắc phục triệt để hiện tượng ảnh bị chớp/nhấp nháy đen/tắt khi vuốt chuyển ảnh (Flicker-Free Apple Carousel & In-Memory HD Cache)**:
   1. **Quản lý chỉ số ảnh nội bộ (Local `currentIndex` Synchronization)**: Tách biệt chỉ mục ảnh hiện tại bên trong `PhotoViewer` khỏi độ trễ bất đồng bộ khi cập nhật `selectedPhoto` của `App.tsx`. Khi hoạt ảnh vuốt kết thúc, chỉ mục ảnh và vị trí `slideOffset` được cập nhật đồng thời trong cùng một chu kỳ render (single batch), loại bỏ 100% tình trạng ảnh cũ bị giật ngược lại 1-2 frames trước khi chuyển sang ảnh mới.
   2. **Kiến trúc ảnh 2 lớp chống chớp đen (Double-Layered Rendering)**: Giữ cố định ảnh thumbnail/base image bên dưới (`decoding="sync"`), lớp ảnh HD độ phân giải cao phủ lên trên mượt mà khi tải xong. Người dùng không bao giờ thấy màn hình đen hoặc khung hình rỗng khi lướt ảnh.
